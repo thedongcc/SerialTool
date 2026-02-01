@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { SessionState, SessionConfig } from '../../types/session';
 import { SerialInput } from './SerialInput';
-import { Settings, Eye, EyeOff, X } from 'lucide-react';
+import { Settings, Eye, EyeOff, X, Trash2, Download } from 'lucide-react';
 import { CRCConfig } from '../../utils/crc';
 
 interface SerialMonitorProps {
@@ -9,9 +9,11 @@ interface SerialMonitorProps {
     onShowSettings?: (view: string) => void;
     onSend?: (data: string | Uint8Array) => void;
     onUpdateConfig?: (updates: Partial<SessionConfig>) => void;
+    onInputStateChange?: (inputState: any) => void;
+    onClearLogs?: () => void;
 }
 
-export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig }: SerialMonitorProps) => {
+export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig, onInputStateChange, onClearLogs }: SerialMonitorProps) => {
     const { logs, isConnected, config } = session;
     const currentPort = config.connection.path;
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -38,6 +40,45 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
             const currentUIState = (config as any).uiState || {};
             onUpdateConfig({ uiState: { ...currentUIState, ...updates } } as any);
         }
+    };
+
+    // Calculate statistics
+    const txBytes = logs.filter(log => log.type === 'TX').reduce((sum, log) => {
+        if (typeof log.data === 'string') {
+            return sum + new TextEncoder().encode(log.data).length;
+        }
+        return sum + log.data.length;
+    }, 0);
+
+    const rxBytes = logs.filter(log => log.type === 'RX').reduce((sum, log) => {
+        if (typeof log.data === 'string') {
+            return sum + new TextEncoder().encode(log.data).length;
+        }
+        return sum + log.data.length;
+    }, 0);
+
+    // Clear logs
+    const handleClearLogs = () => {
+        if (onClearLogs) {
+            onClearLogs();
+        }
+    };
+
+    // Save logs to file
+    const handleSaveLogs = () => {
+        const content = logs.map(log => {
+            const timestamp = new Date(log.timestamp).toLocaleTimeString();
+            const data = formatData(log.data, viewMode, encoding);
+            return `[${timestamp}] [${log.type}] ${data}`;
+        }).join('\n');
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `serial_log_${Date.now()}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     const formatData = (data: string | Uint8Array, mode: 'text' | 'hex', encoding: string) => {
@@ -157,71 +198,76 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
 
                     {/* CRC Toggle with Config */}
                     <div className="relative">
-                        <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[#969696] hover:text-[#cccccc]">
-                            <input
-                                type="checkbox"
-                                checked={crcEnabled}
-                                onChange={toggleCRC}
-                                className="w-3 h-3"
-                            />
-                            CRC Check
+                        <div className="flex items-center gap-1.5">
+                            <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[#969696] hover:text-[#cccccc]">
+                                <input
+                                    type="checkbox"
+                                    checked={crcEnabled}
+                                    onChange={toggleCRC}
+                                    className="w-3 h-3"
+                                />
+                                CRC Check
+                            </label>
                             <Settings
                                 size={12}
-                                className="cursor-pointer hover:text-white"
+                                className="cursor-pointer text-[#969696] hover:text-white"
                                 onClick={(e) => { e.stopPropagation(); setShowCRCPanel(!showCRCPanel); }}
                             />
-                        </label>
+                        </div>
 
                         {showCRCPanel && (
-                            <div className="absolute left-0 top-full mt-1 bg-[#252526] border border-[#3c3c3c] rounded-sm shadow-lg p-3 z-50 min-w-[220px]">
-                                <div className="flex items-center justify-between mb-2">
-                                    <div className="text-[11px] text-[#cccccc] font-medium">RX CRC Settings</div>
-                                    <X size={14} className="cursor-pointer text-[#969696] hover:text-white" onClick={() => setShowCRCPanel(false)} />
-                                </div>
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setShowCRCPanel(false)} />
+                                <div className="absolute left-0 top-full mt-1 bg-[#252526] border border-[#3c3c3c] rounded-sm shadow-lg p-3 z-50 min-w-[220px]">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="text-[11px] text-[#cccccc] font-medium">RX CRC Settings</div>
+                                        <X size={14} className="cursor-pointer text-[#969696] hover:text-white" onClick={() => setShowCRCPanel(false)} />
+                                    </div>
 
-                                {/* Algorithm */}
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] text-[#969696]">Algorithm:</span>
-                                    <select
-                                        className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
-                                        value={rxCRC.algorithm}
-                                        onChange={(e) => updateRxCRC({ algorithm: e.target.value as any })}
-                                    >
-                                        <option value="modbus-crc16">Modbus CRC16</option>
-                                        <option value="crc8">CRC8</option>
-                                        <option value="crc16">CRC16</option>
-                                        <option value="crc32">CRC32</option>
-                                        <option value="sum8">Sum8</option>
-                                        <option value="xor8">XOR8</option>
-                                    </select>
-                                </div>
+                                    {/* Algorithm */}
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[10px] text-[#969696]">Algorithm:</span>
+                                        <select
+                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
+                                            value={rxCRC.algorithm}
+                                            onChange={(e) => updateRxCRC({ algorithm: e.target.value as any })}
+                                        >
+                                            <option value="modbus-crc16">Modbus CRC16</option>
+                                            <option value="crc8">CRC8</option>
+                                            <option value="crc16">CRC16</option>
+                                            <option value="crc32">CRC32</option>
+                                            <option value="sum8">Sum8</option>
+                                            <option value="xor8">XOR8</option>
+                                        </select>
+                                    </div>
 
-                                {/* Start Index */}
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] text-[#969696]">Start:</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5 w-16"
-                                        value={rxCRC.startIndex}
-                                        onChange={(e) => updateRxCRC({ startIndex: parseInt(e.target.value) || 0 })}
-                                    />
-                                </div>
+                                    {/* Start Index */}
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[10px] text-[#969696]">Start:</span>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5 w-16"
+                                            value={rxCRC.startIndex}
+                                            onChange={(e) => updateRxCRC({ startIndex: parseInt(e.target.value) || 0 })}
+                                        />
+                                    </div>
 
-                                {/* End Index */}
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[10px] text-[#969696]">End:</span>
-                                    <select
-                                        className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5 w-20"
-                                        value={rxCRC.endIndex}
-                                        onChange={(e) => updateRxCRC({ endIndex: parseInt(e.target.value) })}
-                                    >
-                                        <option value="-1">End</option>
-                                        <option value="-2">-2</option>
-                                        <option value="-3">-3</option>
-                                    </select>
+                                    {/* End Index */}
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-[#969696]">End:</span>
+                                        <select
+                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5 w-20"
+                                            value={rxCRC.endIndex}
+                                            onChange={(e) => updateRxCRC({ endIndex: parseInt(e.target.value) })}
+                                        >
+                                            <option value="-1">End</option>
+                                            <option value="-2">-2</option>
+                                            <option value="-3">-3</option>
+                                        </select>
+                                    </div>
                                 </div>
-                            </div>
+                            </>
                         )}
                     </div>
 
@@ -283,41 +329,68 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
                         </button>
 
                         {showSettingsPanel && (
-                            <div className="absolute right-0 top-full mt-1 bg-[#252526] border border-[#3c3c3c] rounded-sm shadow-lg p-3 z-50 min-w-[200px]">
-                                <div className="text-[11px] text-[#cccccc] mb-2 font-medium">Display Settings</div>
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setShowSettingsPanel(false)} />
+                                <div className="absolute right-0 top-full mt-1 bg-[#252526] border border-[#3c3c3c] rounded-sm shadow-lg p-3 z-50 min-w-[200px]">
+                                    <div className="text-[11px] text-[#cccccc] mb-2 font-medium">Display Settings</div>
 
-                                {/* Font Size */}
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] text-[#969696]">Font Size:</span>
-                                    <select
-                                        className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
-                                        value={fontSize}
-                                        onChange={(e) => { const val = Number(e.target.value); setFontSize(val); saveUIState({ fontSize: val }); }}
-                                    >
-                                        <option value={11}>11px</option>
-                                        <option value={12}>12px</option>
-                                        <option value={13}>13px</option>
-                                        <option value={14}>14px</option>
-                                        <option value={15}>15px</option>
-                                        <option value={16}>16px</option>
-                                    </select>
-                                </div>
+                                    {/* Font Size */}
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[10px] text-[#969696]">Font Size:</span>
+                                        <select
+                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
+                                            value={fontSize}
+                                            onChange={(e) => { const val = Number(e.target.value); setFontSize(val); saveUIState({ fontSize: val }); }}
+                                        >
+                                            <option value={11}>11px</option>
+                                            <option value={12}>12px</option>
+                                            <option value={13}>13px</option>
+                                            <option value={14}>14px</option>
+                                            <option value={15}>15px</option>
+                                            <option value={16}>16px</option>
+                                        </select>
+                                    </div>
 
-                                {/* Font Family */}
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[10px] text-[#969696]">Font:</span>
-                                    <select
-                                        className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
-                                        value={fontFamily}
-                                        onChange={(e) => { setFontFamily(e.target.value as any); saveUIState({ fontFamily: e.target.value as any }); }}
-                                    >
-                                        <option value="mono">Monospace</option>
-                                        <option value="consolas">Consolas</option>
-                                        <option value="courier">Courier</option>
-                                    </select>
+                                    {/* Font Family */}
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-[#969696]">Font:</span>
+                                        <select
+                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
+                                            value={fontFamily}
+                                            onChange={(e) => { setFontFamily(e.target.value as any); saveUIState({ fontFamily: e.target.value as any }); }}
+                                        >
+                                            <option value="mono">Monospace</option>
+                                            <option value="consolas">Consolas</option>
+                                            <option value="courier">Courier</option>
+                                        </select>
+                                    </div>
                                 </div>
-                            </div>
+                            </>
                         )}
+                    </div>
+
+                    {/* Statistics */}
+                    <div className="flex items-center gap-2 text-[10px] text-[#969696] border-l border-[#3c3c3c] pl-2">
+                        <span>TX: {txBytes}B</span>
+                        <span>RX: {rxBytes}B</span>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-1 border-l border-[#3c3c3c] pl-2">
+                        <button
+                            className="p-1 hover:bg-[#3c3c3c] rounded text-[#969696] hover:text-[#cccccc] transition-colors"
+                            onClick={handleSaveLogs}
+                            title="Save Logs"
+                        >
+                            <Download size={14} />
+                        </button>
+                        <button
+                            className="p-1 hover:bg-[#3c3c3c] rounded text-[#969696] hover:text-[#cccccc] transition-colors"
+                            onClick={handleClearLogs}
+                            title="Clear Logs"
+                        >
+                            <Trash2 size={14} />
+                        </button>
                     </div>
                 </div>
             </div>

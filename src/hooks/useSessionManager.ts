@@ -36,6 +36,10 @@ export const useSessionManager = () => {
         }));
     }, []);
 
+    const clearLogs = useCallback((sessionId: string) => {
+        updateSession(sessionId, () => ({ logs: [] }));
+    }, [updateSession]);
+
     // --- Serial API Interactions ---
 
     const listPorts = useCallback(async () => {
@@ -543,6 +547,7 @@ export const useSessionManager = () => {
         writeToSession,
         updateSessionConfig, // Use the scoped function
         updateUIState,
+        clearLogs,
         publishMqtt,
         listPorts,
         saveSession,

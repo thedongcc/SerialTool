@@ -271,10 +271,13 @@ export const EditorArea = ({ children, sessionManager, editorLayout, onShowSetti
                                             }
 
                                             return <SerialMonitor
+                                                key={session.id}
                                                 session={session}
                                                 onShowSettings={onShowSettings}
                                                 onSend={(data) => sessionManager.writeToSession(session.id, data)}
                                                 onUpdateConfig={(updates) => sessionManager.updateSessionConfig(session.id, updates)}
+                                                onInputStateChange={(inputState) => sessionManager.updateUIState(session.id, inputState)}
+                                                onClearLogs={() => sessionManager.clearLogs(session.id)}
                                             />;
                                         })()
                                     ) : (
