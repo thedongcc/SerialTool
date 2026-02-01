@@ -278,6 +278,10 @@ export const EditorArea = ({ children, sessionManager, editorLayout, onShowSetti
                                                 onUpdateConfig={(updates) => sessionManager.updateSessionConfig(session.id, updates)}
                                                 onInputStateChange={(inputState) => sessionManager.updateUIState(session.id, inputState)}
                                                 onClearLogs={() => sessionManager.clearLogs(session.id)}
+                                                onConnectRequest={() => {
+                                                    sessionManager.setActiveSessionId(session.id); // Ensure active
+                                                    sessionManager.connectSession(session.id);
+                                                }}
                                             />;
                                         })()
                                     ) : (

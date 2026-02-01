@@ -27,6 +27,8 @@ export interface SerialSessionConfig extends BaseSessionConfig {
     uiState?: {
         // Input area
         inputContent?: string;
+        inputHTML?: string; // Persist HTML to keep tokens
+        inputTokens?: Record<string, any>; // Persist token configurations. Type 'any' to avoid circular dependency if possible, or import Token
         inputMode?: 'text' | 'hex';
         lineEnding?: '' | '\n' | '\r' | '\r\n';
         // Display area

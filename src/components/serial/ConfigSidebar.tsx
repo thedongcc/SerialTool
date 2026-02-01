@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { RefreshCw, Save, FolderOpen, Play, Square } from 'lucide-react';
 import { useSessionManager } from '../../hooks/useSessionManager';
 import { SerialSessionConfig, MqttSessionConfig } from '../../types/session';
@@ -11,7 +12,18 @@ interface ConfigSidebarProps {
 const SerialConfigPanel = ({ session, sessionManager }: { session: any, sessionManager: ReturnType<typeof useSessionManager> }) => {
     const { config, isConnected, isConnecting } = session;
     const { connection, txCRC, rxCRC } = config as SerialSessionConfig;
+
     const { updateSessionConfig, connectSession, disconnectSession, listPorts, ports } = sessionManager;
+    const uiState = (config as any).uiState || {};
+    const [highlight, setHighlight] = useState(false);
+
+    useEffect(() => {
+        if (uiState.highlightConnect) {
+            setHighlight(true);
+            const t = setTimeout(() => setHighlight(false), 1500);
+            return () => clearTimeout(t);
+        }
+    }, [uiState.highlightConnect]);
 
     const handleToggleConnection = () => {
         if (isConnected) {
@@ -127,7 +139,9 @@ const SerialConfigPanel = ({ session, sessionManager }: { session: any, sessionM
                     <button
                         className={`w-full py-1.5 px-3 text-white text-[13px] rounded-sm transition-colors flex items-center justify-center gap-2 ${isConnected
                             ? 'bg-[#a1260d] hover:bg-[#c93f24]'
-                            : 'bg-[#0e639c] hover:bg-[#1177bb] disabled:opacity-50 disabled:cursor-not-allowed'
+                            : (highlight
+                                ? 'bg-[#0e639c] ring-2 ring-yellow-400 animate-pulse'
+                                : 'bg-[#0e639c] hover:bg-[#1177bb] disabled:opacity-50 disabled:cursor-not-allowed')
                             }`}
                         disabled={!connection.path && !isConnected}
                         onClick={handleToggleConnection}
@@ -150,70 +164,7 @@ const SerialConfigPanel = ({ session, sessionManager }: { session: any, sessionM
                 </div>
             </div>
 
-            {/* CRC Settings - Only show for Serial? Yes for now. */}
-            <div className="border-t border-[var(--vscode-border)] mt-2 flex-1 flex flex-col min-h-0">
-                <div className="px-4 py-2 text-[11px] font-bold tracking-wide uppercase flex justify-between items-center bg-[#252526] border-b border-[var(--vscode-border)] shrink-0">
-                    <span>CRC Settings</span>
-                </div>
-                <div className="px-4 py-3 flex flex-col gap-4 overflow-y-auto">
-                    {/* TX CRC */}
-                    <div className="flex flex-col gap-2 p-2 bg-[#2d2d2d] rounded">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-[#4ec9b0]">TX (Send) CRC</span>
-                            <label className="flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    className="hidden"
-                                    checked={txCRC.enabled}
-                                    onChange={(e) => updateSessionConfig(session.id, { txCRC: { ...txCRC, enabled: e.target.checked } })}
-                                />
-                                <div className={`w-7 h-4 rounded-full transition-colors relative ${txCRC.enabled ? 'bg-[#007acc]' : 'bg-[#444]'}`}>
-                                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${txCRC.enabled ? 'left-3.5' : 'left-0.5'}`}></div>
-                                </div>
-                            </label>
-                        </div>
-                        <div className={`flex flex-col gap-2 ${!txCRC.enabled && 'opacity-50 pointer-events-none'}`}>
-                            {/* ... CRC Controls ... */}
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[10px] text-[#969696]">Algorithm</label>
-                                <select
-                                    className="w-full bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none"
-                                    value={txCRC.algorithm}
-                                    onChange={(e) => updateSessionConfig(session.id, { txCRC: { ...txCRC, algorithm: e.target.value as any } })}
-                                >
-                                    <option value="modbus-crc16">Modbus CRC16 (LE)</option>
-                                    <option value="ccitt-crc16">CCITT CRC16 (BE)</option>
-                                    <option value="crc32">CRC32</option>
-                                </select>
-                            </div>
-                            <div className="flex gap-2">
-                                <div className="flex flex-col gap-1 flex-1">
-                                    <label className="text-[10px] text-[#969696]">Start [B]</label>
-                                    <input
-                                        type="number"
-                                        className="w-full bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none"
-                                        value={txCRC.startIndex}
-                                        onChange={(e) => updateSessionConfig(session.id, { txCRC: { ...txCRC, startIndex: Number(e.target.value) } })}
-                                    />
-                                </div>
-                                <div className="flex flex-col gap-1 flex-1">
-                                    <label className="text-[10px] text-[#969696]">End [B]</label>
-                                    <select
-                                        className="w-full bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none"
-                                        value={txCRC.endIndex}
-                                        onChange={(e) => updateSessionConfig(session.id, { txCRC: { ...txCRC, endIndex: Number(e.target.value) } })}
-                                    >
-                                        <option value={0}>End</option>
-                                        <option value={-1}>-1</option>
-                                        <option value={-2}>-2</option>
-                                        <option value={-3}>-3</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+
         </div>
     );
 };

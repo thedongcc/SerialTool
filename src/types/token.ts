@@ -9,7 +9,7 @@ export interface CRCConfig {
     // Actually user asked for "manually select which data to check".
     // So:
     startIndex: number; // 0-based index from start of message
-    length: number; // -1 or 0 for "until token"
+    endIndex: number; // -1 = End, -2 = End-1, etc.
 }
 
 export interface AutoIncConfig {
@@ -20,10 +20,14 @@ export interface AutoIncConfig {
     bytes: number; // 1, 2, 4
 }
 
+export interface FlagConfig {
+    hex: string; // e.g. "AA BB"
+}
+
 export interface Token {
-    id: string; // Unique ID for React keys and config mapping
-    type: 'crc' | 'auto_inc';
-    config: CRCConfig | AutoIncConfig;
+    id: string; // Unique ID
+    type: 'crc' | 'auto_inc' | 'flag';
+    config: CRCConfig | AutoIncConfig | FlagConfig;
 }
 
 // A segment represents a chunk of the input: either static text/hex or a dynamic token

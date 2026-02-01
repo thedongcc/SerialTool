@@ -1,7 +1,8 @@
-import { Segment, Token, CRCConfig } from '../types/token';
-import { calculateCRC } from './crc';
+import { Segment, Token, CRCConfig, FlagConfig } from '../types/token';
+import { calculateCRC, sliceData } from './crc';
 
 export const parseDOM = (root: HTMLElement): Segment[] => {
+
     const segments: Segment[] = [];
 
     // Flatten child nodes helper
@@ -84,24 +85,20 @@ export const compileSegments = (
                     offset += p.length;
                 }
 
-                // Determine range
-                let start = config.startIndex;
-                let end = config.length === 0 ? currentBuf.length : start + config.length;
-
-                // Bounds check
-                if (start < 0) start = 0;
-                if (end > currentBuf.length) end = currentBuf.length;
-                if (start >= end) {
-                    // Empty range, maybe 0 bytes CRC or default?
-                    // Let's append 0 bytes
-                    continue;
+                const dataToCheck = sliceData(currentBuf, config.startIndex, config.endIndex);
+                if (dataToCheck.length === 0) {
+                    // Handle empty check if needed
                 }
-
-                const dataToCheck = currentBuf.slice(start, end);
                 const crcBytes = calculateCRC(dataToCheck, config.algorithm);
 
                 parts.push(crcBytes);
                 currentTotalLength += crcBytes.length;
+            } else if (token.type === 'flag') {
+                const config = token.config as FlagConfig;
+                // Parse hex content of the flag
+                const bytes = parseHex(config.hex || '');
+                parts.push(bytes);
+                currentTotalLength += bytes.length;
             }
             // Add other token types here (e.g. AutoInc)
         }

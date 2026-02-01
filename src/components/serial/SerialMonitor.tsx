@@ -11,9 +11,10 @@ interface SerialMonitorProps {
     onUpdateConfig?: (updates: Partial<SessionConfig>) => void;
     onInputStateChange?: (inputState: any) => void;
     onClearLogs?: () => void;
+    onConnectRequest?: () => void;
 }
 
-export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig, onInputStateChange, onClearLogs }: SerialMonitorProps) => {
+export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig, onInputStateChange, onClearLogs, onConnectRequest }: SerialMonitorProps) => {
     const { logs, isConnected, config } = session;
     const currentPort = config.connection.path;
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -116,6 +117,9 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
         }
     }, [logs]);
 
+    // Auto-connect on mount if configured
+
+
     const handleSend = (data: string | Uint8Array, mode: 'text' | 'hex') => {
         if (!onSend) return;
 
@@ -163,9 +167,11 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
 
     const fontFamilyClass = fontFamily === 'consolas' ? 'font-[Consolas]' : fontFamily === 'courier' ? 'font-[Courier]' : 'font-mono';
 
-    const handleInputStateChange = (state: { content: string, mode: 'text' | 'hex', lineEnding: string }) => {
+    const handleInputStateChange = (state: { content: string, html: string, tokens: any, mode: 'text' | 'hex', lineEnding: string }) => {
         saveUIState({
             inputContent: state.content,
+            inputHTML: state.html,
+            inputTokens: state.tokens,
             inputMode: state.mode,
             lineEnding: state.lineEnding
         });
@@ -233,11 +239,9 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                                             onChange={(e) => updateRxCRC({ algorithm: e.target.value as any })}
                                         >
                                             <option value="modbus-crc16">Modbus CRC16</option>
-                                            <option value="crc8">CRC8</option>
-                                            <option value="crc16">CRC16</option>
+                                            <option value="ccitt-crc16">CCITT CRC16</option>
                                             <option value="crc32">CRC32</option>
-                                            <option value="sum8">Sum8</option>
-                                            <option value="xor8">XOR8</option>
+                                            <option value="none">None</option>
                                         </select>
                                     </div>
 
@@ -261,7 +265,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                                             value={rxCRC.endIndex}
                                             onChange={(e) => updateRxCRC({ endIndex: parseInt(e.target.value) })}
                                         >
-                                            <option value="-1">End</option>
+                                            <option value="-1">End (-1)</option>
                                             <option value="-2">-2</option>
                                             <option value="-3">-3</option>
                                         </select>
@@ -269,6 +273,8 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                                 </div>
                             </>
                         )}
+
+
                     </div>
 
                     {/* Timestamp Toggle */}
@@ -433,9 +439,17 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
             <SerialInput
                 onSend={handleSend}
                 initialContent={uiState.inputContent || ''}
+                initialHTML={uiState.inputHTML || ''}
+                initialTokens={uiState.inputTokens as any || {}}
                 initialMode={uiState.inputMode || 'hex'}
                 initialLineEnding={uiState.lineEnding || '\r\n'}
                 onStateChange={handleInputStateChange}
+                isConnected={isConnected}
+                onConnectRequest={() => {
+                    // Open config sidebar and flash button
+                    if (onShowSettings) onShowSettings('serial');
+                    if (onInputStateChange) onInputStateChange({ highlightConnect: Date.now() });
+                }}
             />
         </div>
     );
