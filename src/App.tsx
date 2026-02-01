@@ -1,0 +1,36 @@
+import { Layout } from './components/layout/Layout'
+import { ThemeProvider } from './context/ThemeContext'
+
+function App() {
+  return (
+    <ThemeProvider>
+      <Layout>
+        <div className="flex flex-1 items-center justify-center h-full">
+          <div className="flex flex-col items-center max-w-md text-center">
+            <h1 className="text-4xl font-bold mb-4 text-[var(--vscode-fg)]">SerialTool V1</h1>
+            <p className="text-lg text-[var(--vscode-input-placeholder)] mb-8">VS Code Style Serial Debug Assistant</p>
+
+            <div className="flex gap-4">
+              <button className="px-4 py-2 bg-[var(--vscode-button-bg)] text-[var(--vscode-button-fg)] text-sm hover:bg-[var(--vscode-button-hover-bg)] transition-colors flex items-center gap-2">
+                New Connection
+              </button>
+              <button className="px-4 py-2 bg-[var(--vscode-button-secondary-bg)] text-[var(--vscode-button-fg)] text-sm hover:bg-[var(--vscode-button-secondary-hover-bg)] transition-colors">
+                Open Log...
+              </button>
+            </div>
+
+            <div className="mt-12 text-left w-full">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--vscode-input-placeholder)] mb-2">Recent</h3>
+              <div className="space-y-1">
+                <div className="text-[13px] text-[var(--vscode-textLink-foreground)] hover:underline cursor-pointer">COM3 - 115200</div>
+                <div className="text-[13px] text-[var(--vscode-textLink-foreground)] hover:underline cursor-pointer">COM7 - 9600</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    </ThemeProvider>
+  )
+}
+
+export default App
