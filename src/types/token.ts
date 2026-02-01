@@ -22,6 +22,7 @@ export interface AutoIncConfig {
 
 export interface FlagConfig {
     hex: string; // e.g. "AA BB"
+    name?: string; // Optional custom name
 }
 
 export interface Token {

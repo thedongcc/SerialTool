@@ -116,13 +116,30 @@ const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 let win;
 let serialService = null;
+const stateFile = path.join(electron.app.getPath("userData"), "window-state.json");
+const saveState = () => {
+  if (win && !win.isDestroyed()) {
+    const bounds = win.getBounds();
+    require("fs").writeFileSync(stateFile, JSON.stringify(bounds));
+  }
+};
+const loadState = () => {
+  try {
+    const data = require("fs").readFileSync(stateFile, "utf8");
+    return JSON.parse(data);
+  } catch {
+    return { width: 1e3, height: 800 };
+  }
+};
 function createWindow() {
+  const state = loadState();
   win = new electron.BrowserWindow({
+    ...state,
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     backgroundColor: "#1e1e1e",
     // Fix white flash
     show: true,
-    // Force show to ensure window is visible
+    // Show immediately
     webPreferences: {
       preload: path.join(__dirname, "preload.js")
     },
@@ -135,6 +152,11 @@ function createWindow() {
       height: 30
     }
   });
+  win.once("ready-to-show", () => {
+    win == null ? void 0 : win.show();
+  });
+  win.on("resize", () => saveState());
+  win.on("move", () => saveState());
   serialService = new SerialService(win);
   electron.ipcMain.handle("serial:list-ports", async () => {
     return serialService == null ? void 0 : serialService.listPorts();

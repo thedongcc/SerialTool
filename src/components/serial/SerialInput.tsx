@@ -39,6 +39,88 @@ export const SerialInput = ({
     const hasContent = inputRef.current?.innerText.trim().length ?? 0 > 0;
     const initializedRef = useRef(false);
 
+    // Undo/Redo History
+    const historyRef = useRef<{ html: string, tokens: Record<string, Token> }[]>([]);
+    const historyIndexRef = useRef(-1);
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const saveHistory = (force = false) => {
+        if (!inputRef.current) return;
+        const currentHTML = inputRef.current.innerHTML;
+        const currentTokens = { ...tokens }; // Capture current tokens
+
+        // Avoid duplicates
+        const last = historyRef.current[historyIndexRef.current];
+        if (!force && last && last.html === currentHTML && JSON.stringify(last.tokens) === JSON.stringify(currentTokens)) {
+            return;
+        }
+
+        // Truncate future if we are in middle of stack
+        const newHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
+        newHistory.push({ html: currentHTML, tokens: currentTokens });
+
+        // Limit stack size
+        if (newHistory.length > 50) newHistory.shift();
+
+        historyRef.current = newHistory;
+        historyIndexRef.current = newHistory.length - 1;
+    };
+
+    const undo = () => {
+        if (historyIndexRef.current > 0) {
+            historyIndexRef.current--;
+            const state = historyRef.current[historyIndexRef.current];
+            restoreState(state);
+        }
+    };
+
+    const redo = () => {
+        if (historyIndexRef.current < historyRef.current.length - 1) {
+            historyIndexRef.current++;
+            const state = historyRef.current[historyIndexRef.current];
+            restoreState(state);
+        }
+    };
+
+    const restoreState = (state: { html: string, tokens: Record<string, Token> }) => {
+        if (!inputRef.current) return;
+        setTokens(state.tokens);
+        inputRef.current.innerHTML = state.html;
+        // Re-bind events
+        const spans = inputRef.current.querySelectorAll('span[data-token-id]');
+        spans.forEach(span => {
+            (span as HTMLElement).onclick = (e) => {
+                e.stopPropagation();
+                const id = span.getAttribute('data-token-id')!;
+                const rect = span.getBoundingClientRect();
+                setPopover({ id, x: rect.left, y: rect.bottom });
+            };
+        });
+        // Move cursor to end (simplification)
+        const range = document.createRange();
+        range.selectNodeContents(inputRef.current);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+
+        notifyStateChange(state.tokens);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                redo();
+            } else {
+                undo();
+            }
+        } else if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    };
+
     // Restore initial content
     // Sync initialTokens when they change
     // Sync initialTokens when they change
@@ -109,6 +191,10 @@ export const SerialInput = ({
             } else {
                 notifyStateChange(); // Just content/html changed
             }
+
+            // Debounce save history
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = setTimeout(() => saveHistory(), 500);
         }
     };
 
@@ -148,12 +234,7 @@ export const SerialInput = ({
         onSend(data, mode);
     };
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-        }
-    };
+
 
     // Timer logic - must be after handleSend definition
     useEffect(() => {
@@ -210,12 +291,13 @@ export const SerialInput = ({
             const span = document.createElement('span');
             span.contentEditable = 'false';
             span.setAttribute('data-token-id', id);
-            span.className = 'inline-block bg-[#3c3c3c] text-[#569cd6] px-1 rounded mx-0.5 cursor-pointer select-none text-[11px] font-mono align-middle';
+            // Updated style: Non-rounded (sharp), narrow padding, 13px font
+            span.className = 'inline-block bg-[#2d2d2d] text-[#4ec9b0] px-[2px] rounded-none cursor-pointer select-none text-[13px] font-mono align-baseline hover:bg-[#383838] transition-colors';
 
             if (type === 'crc') {
-                span.innerText = '[Modbus-L8] [Modbus-H8]';
+                span.innerText = 'CRC: Modbus';
             } else {
-                span.innerText = '[Flag AA]';
+                span.innerText = 'Flag: AA';
             }
 
             span.onclick = (e) => {
@@ -230,13 +312,15 @@ export const SerialInput = ({
                 range.deleteContents();
                 range.insertNode(span);
                 range.setStartAfter(span);
-                range.setEndAfter(span);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
             } else {
                 inputRef.current.appendChild(span);
             }
 
-            // Trigger input event manually to sync state
             handleInput();
+            saveHistory(true);
         }
 
         const newTokens = { ...tokens, [id]: newToken };
@@ -253,18 +337,22 @@ export const SerialInput = ({
                     const el = inputRef.current.querySelector(`[data-token-id="${id}"]`) as HTMLElement;
                     if (el) {
                         if (token.type === 'crc') {
-                            let label = '[CRC]';
+                            let label = 'CRC';
                             switch (newConfig.algorithm) {
-                                case 'modbus-crc16': label = '[Modbus-L8] [Modbus-H8]'; break;
-                                case 'ccitt-crc16': label = '[CCITT-H8] [CCITT-L8]'; break;
-                                case 'crc32': label = '[CRC32]'; break;
+                                case 'modbus-crc16': label = 'CRC: Modbus'; break;
+                                case 'ccitt-crc16': label = 'CRC: CCITT'; break;
+                                case 'crc32': label = 'CRC: 32'; break;
                             }
                             el.innerText = label;
                         } else if (token.type === 'flag') {
-                            const hex = (newConfig as FlagConfig).hex || '';
-                            // Truncate if too long
-                            const display = hex.length > 12 ? hex.substring(0, 12) + '...' : hex;
-                            el.innerText = hex ? `[Flag ${display}]` : '[Flag]';
+                            const config = newConfig as FlagConfig;
+                            const hex = config.hex || '';
+                            const display = hex.length > 20 ? hex.substring(0, 20) + '...' : hex; // Longer preview
+                            if (config.name) {
+                                el.innerText = `${config.name}: ${display}`;
+                            } else {
+                                el.innerText = hex ? `Flag: ${display}` : 'Flag';
+                            }
                         }
                     }
                 }
@@ -274,6 +362,7 @@ export const SerialInput = ({
 
         const updatedTokens = { ...tokens, [id]: { ...tokens[id], config: newConfig } };
         notifyStateChange(updatedTokens);
+        saveHistory(true); // Save on config change
     };
 
     const deleteToken = (id: string) => {
@@ -395,6 +484,7 @@ export const SerialInput = ({
                     <div
                         ref={inputRef}
                         contentEditable
+                        className="outline-none font-mono text-[13px] leading-6 tracking-normal"
                         onKeyDown={handleKeyDown}
                         onInput={handleInput}
                         onBlur={() => {
@@ -404,20 +494,20 @@ export const SerialInput = ({
                                 const walk = (node: Node) => {
                                     if (node.nodeType === Node.TEXT_NODE) {
                                         const text = node.textContent || '';
-                                        // Remove all whitespace
-                                        const clean = text.replace(/\s+/g, '').replace(/[^0-9A-Fa-f]/g, ''); // Also strip invalid chars? Or just spaces?
-                                        // User said "add space". Let's clean up valid hex too.
-                                        // Strip non-hex?
-                                        // "If hex format..." usually implies restricting to hex.
-                                        // But users might type comments? Token parser separates blocks.
-                                        // Let's safe-guard: only strip spaces, format chunks of 2.
-                                        // But if I have "Hello", it becomes "He ll ..."?
-                                        // I'll stick to: Strip spaces, split 2.
-                                        // But if user typed non-hex, it will look weird.
-                                        // parseHex cleans it anyway.
-                                        // I'll format hex-like chars.
+                                        // Preserve boundary spacing
+                                        const hasLeading = /^\s/.test(text);
+                                        const hasTrailing = /\s$/.test(text);
+
+                                        // Remove all whitespace and non-hex for formatting
+                                        const clean = text.replace(/\s+/g, '').replace(/[^0-9A-Fa-f]/g, '');
+
                                         if (clean.length > 0) {
-                                            const formatted = clean.match(/.{1,2}/g)?.join(' ') || clean;
+                                            let formatted = clean.match(/.{1,2}/g)?.join(' ') || clean;
+
+                                            // Restore boundary spaces if they existed
+                                            if (hasLeading && !formatted.startsWith(' ')) formatted = ' ' + formatted;
+                                            if (hasTrailing && !formatted.endsWith(' ')) formatted = formatted + ' ';
+
                                             if (formatted !== text) {
                                                 node.textContent = formatted;
                                             }

@@ -29,11 +29,29 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
         onClose();
     };
 
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSave();
+        }
+    };
+
     const renderContent = () => {
         if (token.type === 'flag') {
             const flagConfig = config as FlagConfig;
             return (
                 <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[11px] text-[#969696]">Name (Optional)</label>
+                        <input
+                            type="text"
+                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
+                            value={flagConfig.name || ''}
+                            placeholder="e.g. Frame Header"
+                            onChange={e => setConfig({ ...flagConfig, name: e.target.value })}
+                            onKeyDown={handleKeyDown}
+                        />
+                    </div>
                     <div className="flex flex-col gap-1">
                         <label className="text-[11px] text-[#969696]">Hex Content</label>
                         <textarea
@@ -44,6 +62,7 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                                 // Simple hex validation/filter could be added here
                                 setConfig({ ...flagConfig, hex: e.target.value });
                             }}
+                            onKeyDown={handleKeyDown}
                         />
                         <p className="text-[10px] text-[#666]">Enter hex bytes separated by space</p>
                     </div>
@@ -61,6 +80,7 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                             className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
                             value={crcConfig.algorithm}
                             onChange={e => setConfig({ ...crcConfig, algorithm: e.target.value as any })}
+                            onKeyDown={handleKeyDown}
                         >
                             <option value="modbus-crc16">Modbus CRC16 (LE)</option>
                             <option value="ccitt-crc16">CCITT CRC16 (BE)</option>
@@ -76,6 +96,7 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                                 className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
                                 value={crcConfig.startIndex}
                                 onChange={e => setConfig({ ...crcConfig, startIndex: parseInt(e.target.value) || 0 })}
+                                onKeyDown={handleKeyDown}
                             />
                         </div>
                         <div className="flex flex-col gap-1 flex-1">
@@ -84,6 +105,7 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                                 className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
                                 value={crcConfig.endIndex ?? -1}
                                 onChange={e => setConfig({ ...crcConfig, endIndex: parseInt(e.target.value) })}
+                                onKeyDown={handleKeyDown}
                             >
                                 <option value="-1">End (-1)</option>
                                 <option value="-2">-2</option>
@@ -99,13 +121,17 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
 
     if (token.type !== 'crc' && token.type !== 'flag') return null;
 
+    const POPOVER_HEIGHT = 280; // Estimated max height
+    const isOverflow = position.y + POPOVER_HEIGHT > window.innerHeight;
+    const top = isOverflow ? Math.max(10, position.y - POPOVER_HEIGHT - 10) : position.y + 24;
+
     return (
         <div
             ref={popoverRef}
             className="fixed z-50 w-64 bg-[#252526] border border-[var(--vscode-widget-border)] shadow-xl rounded-md flex flex-col text-[var(--vscode-fg)]"
             style={{
                 left: Math.min(position.x, window.innerWidth - 270), // Keep within screen
-                top: position.y + 24
+                top
             }}
         >
             <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-border)] bg-[#2d2d2d]">

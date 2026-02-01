@@ -144,11 +144,31 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 let win: BrowserWindow | null
 let serialService: SerialService | null = null
 
+const stateFile = path.join(app.getPath('userData'), 'window-state.json');
+const saveState = () => {
+  if (win && !win.isDestroyed()) {
+    const bounds = win.getBounds();
+    require('fs').writeFileSync(stateFile, JSON.stringify(bounds));
+  }
+};
+
+const loadState = () => {
+  try {
+    const data = require('fs').readFileSync(stateFile, 'utf8');
+    return JSON.parse(data);
+  } catch {
+    return { width: 1000, height: 800 }; // Default
+  }
+};
+
 function createWindow() {
+  const state = loadState();
+
   win = new BrowserWindow({
+    ...state,
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     backgroundColor: '#1e1e1e', // Fix white flash
-    show: true, // Force show to ensure window is visible
+    show: true, // Show immediately
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -160,6 +180,13 @@ function createWindow() {
       height: 30
     },
   })
+
+  win.once('ready-to-show', () => {
+    win?.show();
+  });
+
+  win.on('resize', () => saveState());
+  win.on('move', () => saveState());
 
   // Initialize SerialService
   serialService = new SerialService(win)
