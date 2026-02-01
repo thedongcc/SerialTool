@@ -162,7 +162,11 @@ export const useSessionManager = () => {
         const result = await window.serialAPI.write(sessionId, finalData);
 
         if (result.success) {
-            addLog(sessionId, 'TX', finalData);
+            // Also validate TX data with RX CRC config if enabled
+            const crcStatus = session.config.rxCRC?.enabled
+                ? validateRXCRC(finalData, session.config.rxCRC)
+                : 'none';
+            addLog(sessionId, 'TX', finalData, crcStatus);
         } else {
             addLog(sessionId, 'ERROR', `Write failed: ${result.error}`);
         }
@@ -251,8 +255,19 @@ export const useSessionManager = () => {
                     parity: 'none'
                 },
                 txCRC: { enabled: false, algorithm: 'modbus-crc16', startIndex: 0, endIndex: 0 },
-                rxCRC: { enabled: false, algorithm: 'modbus-crc16', startIndex: 0, endIndex: 0 },
+                rxCRC: { enabled: false, algorithm: 'modbus-crc16', startIndex: 0, endIndex: -1 },
                 autoConnect: false,
+                uiState: {
+                    inputContent: '',
+                    inputMode: 'hex',
+                    lineEnding: '\r\n',
+                    viewMode: 'hex',
+                    filterMode: 'all',
+                    encoding: 'utf-8',
+                    fontSize: 13,
+                    fontFamily: 'mono',
+                    showTimestamp: true
+                },
                 ...config
             } as any;
         }
@@ -290,6 +305,38 @@ export const useSessionManager = () => {
             setActiveSessionId(prev => prev === sessionId ? null : prev);
         }
     }, [disconnectSession, activeSessionId]);
+
+    const duplicateSession = useCallback(async (sourceSessionId: string) => {
+        const sourceSession = sessions.find(s => s.id === sourceSessionId);
+        if (!sourceSession) return null;
+
+        const newId = Date.now().toString();
+        const newConfig = {
+            ...sourceSession.config,
+            id: newId,
+            name: `${sourceSession.config.name} (Copy)`
+        };
+
+        const newSession: SessionState = {
+            id: newId,
+            config: newConfig as SessionConfig,
+            isConnected: false,
+            isConnecting: false,
+            logs: [] // 不复制日志，只复制配置和 UI 状态
+        };
+
+        setSessions(prev => [...prev, newSession]);
+        setActiveSessionId(newId);
+
+        // Persist
+        const newSaved = [...savedSessions, newConfig as SessionConfig];
+        setSavedSessions(newSaved);
+        if (window.sessionAPI) {
+            await window.sessionAPI.save(newSaved);
+        }
+
+        return newId;
+    }, [sessions, savedSessions]);
 
     // --- Global Listeners Setup ---
     // We need to setup listeners for ALL sessions.
@@ -461,6 +508,16 @@ export const useSessionManager = () => {
         }
     }, [sessions, savedSessions, updateSession]);
 
+    const updateUIState = useCallback((sessionId: string, uiStateUpdates: Partial<any>) => {
+        const session = sessions.find(s => s.id === sessionId);
+        if (!session || session.config.type !== 'serial') return;
+
+        const currentUIState = (session.config as any).uiState || {};
+        updateSessionConfig(sessionId, {
+            uiState: { ...currentUIState, ...uiStateUpdates }
+        } as any);
+    }, [sessions, updateSessionConfig]);
+
 
     // Initial load
     useEffect(() => {
@@ -479,11 +536,13 @@ export const useSessionManager = () => {
         savedSessions,
         ports,
         createSession,
+        duplicateSession,
         closeSession,
         connectSession,
         disconnectSession,
         writeToSession,
         updateSessionConfig, // Use the scoped function
+        updateUIState,
         publishMqtt,
         listPorts,
         saveSession,

@@ -36,24 +36,35 @@ export const useEditorLayout = () => {
     }, [activeGroupId]);
 
     const closeView = useCallback((groupId: string, sessionId: string) => {
-        setGroups(prev => prev.map(group => {
-            if (group.id === groupId) {
-                const newViews = group.views.filter(id => id !== sessionId);
-                let newActiveId = group.activeViewId;
-                if (newActiveId === sessionId) {
-                    // Activate neighbor or null
-                    const index = group.views.indexOf(sessionId);
-                    if (newViews.length > 0) {
-                        // Try same index, or last
-                        newActiveId = newViews[Math.min(index, newViews.length - 1)];
-                    } else {
-                        newActiveId = null;
+        setGroups(prev => {
+            const updatedGroups = prev.map(group => {
+                if (group.id === groupId) {
+                    const newViews = group.views.filter(id => id !== sessionId);
+                    let newActiveId = group.activeViewId;
+                    if (newActiveId === sessionId) {
+                        // Activate neighbor or null
+                        const index = group.views.indexOf(sessionId);
+                        if (newViews.length > 0) {
+                            // Try same index, or last
+                            newActiveId = newViews[Math.min(index, newViews.length - 1)];
+                        } else {
+                            newActiveId = null;
+                        }
                     }
+                    return { ...group, views: newViews, activeViewId: newActiveId };
                 }
-                return { ...group, views: newViews, activeViewId: newActiveId };
+                return group;
+            });
+
+            // Auto-close empty groups (but keep at least one group)
+            if (updatedGroups.length > 1) {
+                const filteredGroups = updatedGroups.filter(g => g.views.length > 0);
+                // Make sure we don't remove all groups
+                return filteredGroups.length > 0 ? filteredGroups : [updatedGroups[0]];
             }
-            return group;
-        }));
+
+            return updatedGroups;
+        });
     }, []);
 
     const splitGroup = useCallback((sourceGroupId: string) => {
@@ -65,7 +76,7 @@ export const useEditorLayout = () => {
             const newGroupId = `group-${Date.now()}`;
             const newGroup: EditorGroup = {
                 id: newGroupId,
-                // VS Code copies the active view to the new group
+                // VSCode-style: just reference the same session in a new editor group
                 views: sourceGroup.activeViewId ? [sourceGroup.activeViewId] : [],
                 activeViewId: sourceGroup.activeViewId
             };
@@ -74,8 +85,6 @@ export const useEditorLayout = () => {
             newGroups.splice(index + 1, 0, newGroup);
             return newGroups;
         });
-        // We probably want to activate the new group?
-        // setActiveGroupId(newGroupId); // Need to do this in effect or result
     }, []);
 
     const closeGroup = useCallback((groupId: string) => {

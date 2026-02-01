@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect } from 'react';
 import { SessionState, SessionConfig } from '../../types/session';
 import { SerialInput } from './SerialInput';
-import { Settings, Eye, EyeOff } from 'lucide-react';
+import { Settings, Eye, EyeOff, X } from 'lucide-react';
+import { CRCConfig } from '../../utils/crc';
 
 interface SerialMonitorProps {
     session: SessionState;
@@ -15,17 +16,29 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
     const currentPort = config.connection.path;
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    // Display Settings State
-    const [viewMode, setViewMode] = useState<'text' | 'hex'>('text');
-    const [showTimestamp, setShowTimestamp] = useState(true);
-    const [filterMode, setFilterMode] = useState<'all' | 'rx' | 'tx'>('all');
-    const [encoding, setEncoding] = useState<'utf-8' | 'gbk' | 'ascii'>('utf-8');
-    const [fontSize, setFontSize] = useState<number>(13);
-    const [fontFamily, setFontFamily] = useState<'mono' | 'consolas' | 'courier'>('mono');
+    const uiState = (config as any).uiState || {};
+
+    // Display Settings State - Initialize from uiState
+    const [viewMode, setViewMode] = useState<'text' | 'hex'>(uiState.viewMode || 'hex');
+    const [showTimestamp, setShowTimestamp] = useState(uiState.showTimestamp !== undefined ? uiState.showTimestamp : true);
+    const [filterMode, setFilterMode] = useState<'all' | 'rx' | 'tx'>(uiState.filterMode || 'all');
+    const [encoding, setEncoding] = useState<'utf-8' | 'gbk' | 'ascii'>(uiState.encoding || 'utf-8');
+    const [fontSize, setFontSize] = useState<number>(uiState.fontSize || 13);
+    const [fontFamily, setFontFamily] = useState<'mono' | 'consolas' | 'courier'>(uiState.fontFamily || 'mono');
     const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+    const [showCRCPanel, setShowCRCPanel] = useState(false);
 
     // CRC is in session.config.rxCRC.enabled
     const crcEnabled = (config as any).rxCRC?.enabled || false;
+    const rxCRC = (config as any).rxCRC || { enabled: false, algorithm: 'modbus-crc16', startIndex: 0, endIndex: 0 };
+
+    // Save UI state when it changes
+    const saveUIState = (updates: any) => {
+        if (onUpdateConfig) {
+            const currentUIState = (config as any).uiState || {};
+            onUpdateConfig({ uiState: { ...currentUIState, ...updates } } as any);
+        }
+    };
 
     const formatData = (data: string | Uint8Array, mode: 'text' | 'hex', encoding: string) => {
         if (mode === 'hex') {
@@ -45,7 +58,6 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
             if (encoding === 'gbk') {
                 // TextDecoder in browsers may not support GBK directly
                 // For now, fallback to utf-8 or use a polyfill
-                // Proper GBK decoding requires iconv-lite or similar
                 return new TextDecoder('utf-8').decode(data);
             } else if (encoding === 'ascii') {
                 return new TextDecoder('ascii').decode(data);
@@ -96,6 +108,11 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
         onUpdateConfig({ rxCRC: { ...currentRxCRC, enabled: !crcEnabled } } as any);
     };
 
+    const updateRxCRC = (updates: Partial<CRCConfig>) => {
+        if (!onUpdateConfig) return;
+        onUpdateConfig({ rxCRC: { ...rxCRC, ...updates } } as any);
+    };
+
     // Filter logs
     const filteredLogs = logs.filter(log => {
         if (filterMode === 'rx') return log.type === 'RX';
@@ -104,6 +121,14 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
     });
 
     const fontFamilyClass = fontFamily === 'consolas' ? 'font-[Consolas]' : fontFamily === 'courier' ? 'font-[Courier]' : 'font-mono';
+
+    const handleInputStateChange = (state: { content: string, mode: 'text' | 'hex', lineEnding: string }) => {
+        saveUIState({
+            inputContent: state.content,
+            inputMode: state.mode,
+            lineEnding: state.lineEnding
+        });
+    };
 
     return (
         <div className="absolute inset-0 flex flex-col bg-[#1e1e1e]">
@@ -118,52 +143,119 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
                     <div className="flex items-center gap-1 bg-[#1e1e1e] p-0.5 rounded border border-[#3c3c3c]">
                         <button
                             className={`px-2 py-0.5 text-[10px] rounded ${viewMode === 'text' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:text-[#cccccc]'}`}
-                            onClick={() => setViewMode('text')}
+                            onClick={() => { setViewMode('text'); saveUIState({ viewMode: 'text' }); }}
                         >
                             Text
                         </button>
                         <button
                             className={`px-2 py-0.5 text-[10px] rounded ${viewMode === 'hex' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:text-[#cccccc]'}`}
-                            onClick={() => setViewMode('hex')}
+                            onClick={() => { setViewMode('hex'); saveUIState({ viewMode: 'hex' }); }}
                         >
                             Hex
                         </button>
                     </div>
 
-                    {/* CRC Toggle */}
-                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[#969696] hover:text-[#cccccc]">
-                        <input
-                            type="checkbox"
-                            checked={crcEnabled}
-                            onChange={toggleCRC}
-                            className="w-3 h-3"
-                        />
-                        CRC Check
-                    </label>
+                    {/* CRC Toggle with Config */}
+                    <div className="relative">
+                        <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[#969696] hover:text-[#cccccc]">
+                            <input
+                                type="checkbox"
+                                checked={crcEnabled}
+                                onChange={toggleCRC}
+                                className="w-3 h-3"
+                            />
+                            CRC Check
+                            <Settings
+                                size={12}
+                                className="cursor-pointer hover:text-white"
+                                onClick={(e) => { e.stopPropagation(); setShowCRCPanel(!showCRCPanel); }}
+                            />
+                        </label>
+
+                        {showCRCPanel && (
+                            <div className="absolute left-0 top-full mt-1 bg-[#252526] border border-[#3c3c3c] rounded-sm shadow-lg p-3 z-50 min-w-[220px]">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="text-[11px] text-[#cccccc] font-medium">RX CRC Settings</div>
+                                    <X size={14} className="cursor-pointer text-[#969696] hover:text-white" onClick={() => setShowCRCPanel(false)} />
+                                </div>
+
+                                {/* Algorithm */}
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] text-[#969696]">Algorithm:</span>
+                                    <select
+                                        className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
+                                        value={rxCRC.algorithm}
+                                        onChange={(e) => updateRxCRC({ algorithm: e.target.value as any })}
+                                    >
+                                        <option value="modbus-crc16">Modbus CRC16</option>
+                                        <option value="crc8">CRC8</option>
+                                        <option value="crc16">CRC16</option>
+                                        <option value="crc32">CRC32</option>
+                                        <option value="sum8">Sum8</option>
+                                        <option value="xor8">XOR8</option>
+                                    </select>
+                                </div>
+
+                                {/* Start Index */}
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] text-[#969696]">Start:</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5 w-16"
+                                        value={rxCRC.startIndex}
+                                        onChange={(e) => updateRxCRC({ startIndex: parseInt(e.target.value) || 0 })}
+                                    />
+                                </div>
+
+                                {/* End Index */}
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-[#969696]">End:</span>
+                                    <select
+                                        className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5 w-20"
+                                        value={rxCRC.endIndex}
+                                        onChange={(e) => updateRxCRC({ endIndex: parseInt(e.target.value) })}
+                                    >
+                                        <option value="-1">End</option>
+                                        <option value="-2">-2</option>
+                                        <option value="-3">-3</option>
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     {/* Timestamp Toggle */}
                     <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[#969696] hover:text-[#cccccc]">
                         <input
                             type="checkbox"
                             checked={showTimestamp}
-                            onChange={(e) => setShowTimestamp(e.target.checked)}
+                            onChange={(e) => { setShowTimestamp(e.target.checked); saveUIState({ showTimestamp: e.target.checked }); }}
                             className="w-3 h-3"
                         />
                         Timestamp
                     </label>
 
-                    {/* RX/TX Filter */}
-                    <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-[#969696]">Show:</span>
-                        <select
-                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
-                            value={filterMode}
-                            onChange={(e) => setFilterMode(e.target.value as any)}
+                    {/* RX/TX Filter - Button Group */}
+                    <div className="flex items-center gap-1 bg-[#1e1e1e] p-0.5 rounded border border-[#3c3c3c]">
+                        <button
+                            className={`px-2 py-0.5 text-[10px] rounded ${filterMode === 'all' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:text-[#cccccc]'}`}
+                            onClick={() => { setFilterMode('all'); saveUIState({ filterMode: 'all' }); }}
                         >
-                            <option value="all">All</option>
-                            <option value="rx">RX Only</option>
-                            <option value="tx">TX Only</option>
-                        </select>
+                            All
+                        </button>
+                        <button
+                            className={`px-2 py-0.5 text-[10px] rounded ${filterMode === 'rx' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:text-[#cccccc]'}`}
+                            onClick={() => { setFilterMode('rx'); saveUIState({ filterMode: 'rx' }); }}
+                        >
+                            RX
+                        </button>
+                        <button
+                            className={`px-2 py-0.5 text-[10px] rounded ${filterMode === 'tx' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:text-[#cccccc]'}`}
+                            onClick={() => { setFilterMode('tx'); saveUIState({ filterMode: 'tx' }); }}
+                        >
+                            TX
+                        </button>
                     </div>
 
                     {/* Encoding */}
@@ -172,7 +264,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
                         <select
                             className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
                             value={encoding}
-                            onChange={(e) => setEncoding(e.target.value as any)}
+                            onChange={(e) => { setEncoding(e.target.value as any); saveUIState({ encoding: e.target.value as any }); }}
                         >
                             <option value="utf-8">UTF-8</option>
                             <option value="gbk">GBK</option>
@@ -200,7 +292,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
                                     <select
                                         className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
                                         value={fontSize}
-                                        onChange={(e) => setFontSize(Number(e.target.value))}
+                                        onChange={(e) => { const val = Number(e.target.value); setFontSize(val); saveUIState({ fontSize: val }); }}
                                     >
                                         <option value={11}>11px</option>
                                         <option value={12}>12px</option>
@@ -217,7 +309,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
                                     <select
                                         className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
                                         value={fontFamily}
-                                        onChange={(e) => setFontFamily(e.target.value as any)}
+                                        onChange={(e) => { setFontFamily(e.target.value as any); saveUIState({ fontFamily: e.target.value as any }); }}
                                     >
                                         <option value="mono">Monospace</option>
                                         <option value="consolas">Consolas</option>
@@ -267,6 +359,10 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig 
             {/* Serial Input Area */}
             <SerialInput
                 onSend={handleSend}
+                initialContent={uiState.inputContent || ''}
+                initialMode={uiState.inputMode || 'hex'}
+                initialLineEnding={uiState.lineEnding || '\r\n'}
+                onStateChange={handleInputStateChange}
             />
         </div>
     );

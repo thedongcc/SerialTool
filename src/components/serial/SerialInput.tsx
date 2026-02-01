@@ -6,20 +6,46 @@ import { parseDOM, compileSegments } from '../../utils/InputParser';
 
 interface SerialInputProps {
     onSend: (data: string | Uint8Array, mode: 'text' | 'hex') => void;
+    initialContent?: string;
+    initialMode?: 'text' | 'hex';
+    initialLineEnding?: '' | '\n' | '\r' | '\r\n';
+    onStateChange?: (state: { content: string, mode: 'text' | 'hex', lineEnding: '' | '\n' | '\r' | '\r\n' }) => void;
 }
 
-export const SerialInput = ({ onSend }: SerialInputProps) => {
-    const [mode, setMode] = useState<'text' | 'hex'>('text');
-    const [lineEnding, setLineEnding] = useState<'' | '\n' | '\r' | '\r\n'>('\r\n');
+export const SerialInput = ({
+    onSend,
+    initialContent = '',
+    initialMode = 'hex',
+    initialLineEnding = '\r\n',
+    onStateChange
+}: SerialInputProps) => {
+    const [mode, setMode] = useState<'text' | 'hex'>(initialMode);
+    const [lineEnding, setLineEnding] = useState<'' | '\n' | '\r' | '\r\n'>(initialLineEnding);
     const [tokens, setTokens] = useState<Record<string, Token>>({});
     const [popover, setPopover] = useState<{ id: string, x: number, y: number } | null>(null);
     const inputRef = useRef<HTMLDivElement>(null);
     const [hasContent, setHasContent] = useState(false);
+    const initializedRef = useRef(false);
+
+    // Restore initial content
+    useEffect(() => {
+        if (inputRef.current && initialContent && !initializedRef.current) {
+            inputRef.current.innerText = initialContent;
+            setHasContent(initialContent.length > 0);
+            initializedRef.current = true;
+        }
+    }, [initialContent]);
 
     // Sync input handling
     const handleInput = () => {
         if (inputRef.current) {
-            setHasContent(inputRef.current.innerText.trim().length > 0 || inputRef.current.querySelector('[data-token-id]') !== null);
+            const content = inputRef.current.innerText;
+            setHasContent(content.trim().length > 0 || inputRef.current.querySelector('[data-token-id]') !== null);
+
+            // Notify parent of content change
+            if (onStateChange) {
+                onStateChange({ content, mode, lineEnding });
+            }
         }
     };
 
@@ -132,7 +158,13 @@ export const SerialInput = ({ onSend }: SerialInputProps) => {
                         <select
                             className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1 py-0.5 max-w-[80px]"
                             value={lineEnding}
-                            onChange={(e) => setLineEnding(e.target.value as any)}
+                            onChange={(e) => {
+                                const val = e.target.value as any;
+                                setLineEnding(val);
+                                if (onStateChange && inputRef.current) {
+                                    onStateChange({ content: inputRef.current.innerText, mode, lineEnding: val });
+                                }
+                            }}
                         >
                             <option value="">None</option>
                             <option value="\n">LF</option>
@@ -150,11 +182,21 @@ export const SerialInput = ({ onSend }: SerialInputProps) => {
                     <div className="flex flex-col gap-0.5 bg-[#1e1e1e] rounded p-0.5 border border-[#3c3c3c]">
                         <div
                             className={`text-[10px] text-center cursor-pointer py-1 rounded-sm uppercase ${mode === 'text' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:bg-[#333]'}`}
-                            onClick={() => setMode('text')}
+                            onClick={() => {
+                                setMode('text');
+                                if (onStateChange && inputRef.current) {
+                                    onStateChange({ content: inputRef.current.innerText, mode: 'text', lineEnding });
+                                }
+                            }}
                         >TXT</div>
                         <div
                             className={`text-[10px] text-center cursor-pointer py-1 rounded-sm uppercase ${mode === 'hex' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:bg-[#333]'}`}
-                            onClick={() => setMode('hex')}
+                            onClick={() => {
+                                setMode('hex');
+                                if (onStateChange && inputRef.current) {
+                                    onStateChange({ content: inputRef.current.innerText, mode: 'hex', lineEnding });
+                                }
+                            }}
                         >HEX</div>
                     </div>
                 </div>

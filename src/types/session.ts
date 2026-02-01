@@ -23,6 +23,20 @@ export interface SerialSessionConfig extends BaseSessionConfig {
     connection: SerialOpenOptions;
     txCRC: CRCConfig;
     rxCRC: CRCConfig;
+    // UI State (persistent)
+    uiState?: {
+        // Input area
+        inputContent?: string;
+        inputMode?: 'text' | 'hex';
+        lineEnding?: '' | '\n' | '\r' | '\r\n';
+        // Display area
+        viewMode?: 'text' | 'hex';
+        filterMode?: 'all' | 'rx' | 'tx';
+        encoding?: 'utf-8' | 'gbk' | 'ascii';
+        fontSize?: number;
+        fontFamily?: 'mono' | 'consolas' | 'courier';
+        showTimestamp?: boolean;
+    };
 }
 
 export interface MqttSessionConfig extends BaseSessionConfig {

@@ -227,7 +227,10 @@ export const EditorArea = ({ children, sessionManager, editorLayout, onShowSetti
                                         <div
                                             className="p-1 hover:bg-[var(--vscode-hover)] rounded cursor-pointer text-[var(--vscode-fg)]"
                                             title="Split Editor Right"
-                                            onClick={(e) => { e.stopPropagation(); splitGroup(group.id); }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                splitGroup(group.id);
+                                            }}
                                         >
                                             <Columns size={14} />
                                         </div>
