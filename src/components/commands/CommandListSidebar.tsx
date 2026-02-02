@@ -1,5 +1,5 @@
-import { Plus, FolderPlus, Upload, Trash2, MoreHorizontal, FileText, Folder, Play, CornerDownLeft } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { Plus, FolderPlus, Upload, Trash2, MoreHorizontal, FileText, Folder, Play, CornerDownLeft, Copy } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
 import { useCommandManager } from '../../hooks/useCommandManager';
 import { CommandList } from './CommandList';
 import { CommandEntity, CommandItem } from '../../types/command';
@@ -10,6 +10,7 @@ import { ContextMenu } from '../common/ContextMenu';
 import { DndContext, DragEndEvent, PointerSensor, useSensor, useSensors, closestCenter, CollisionDetection, pointerWithin, rectIntersection, useDroppable } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { CommandProvider } from '../../context/CommandContext';
+import { MessagePipeline } from '../../services/MessagePipeline';
 
 // Helper component for the scrollable list area
 // This needs to be a separate component so it can validly consume useDroppable context from DndContext
@@ -18,13 +19,19 @@ const CommandScrollArea = ({
     onEdit,
     onSend,
     onContextMenu,
-    canSend
+    canSend,
+    selectedIds,
+    onSelect,
+    onClearSelection
 }: {
     items: CommandEntity[];
     onEdit: (item: CommandEntity) => void;
     onSend: (item: CommandItem) => void;
-    onContextMenu: (e: React.MouseEvent, item: CommandEntity) => void;
+    onContextMenu: (e: React.MouseEvent, item?: CommandEntity) => void;
     canSend: boolean;
+    selectedIds: Set<string>;
+    onSelect: (e: React.MouseEvent, item: CommandEntity) => void;
+    onClearSelection: () => void;
 }) => {
     // 1. Root Drop Hook (Catches drags to empty space)
     const { setNodeRef: setRootDropRef, isOver, active } = useDroppable({
@@ -40,6 +47,8 @@ const CommandScrollArea = ({
         <div
             ref={setRootDropRef}
             className="flex-1 overflow-y-auto p-1 min-h-0 relative"
+            onContextMenu={(e) => onContextMenu(e)}
+            onClick={onClearSelection}
         >
             <CommandList
                 items={items}
@@ -48,6 +57,8 @@ const CommandScrollArea = ({
                 onContextMenu={onContextMenu}
                 dropIndicator={null} // Pass null, using local state in items
                 canSend={canSend}
+                selectedIds={selectedIds}
+                onSelect={onSelect}
             />
 
             {/* Visual Insertion Line at Bottom (For Root Drop) */}
@@ -67,11 +78,134 @@ const CommandScrollArea = ({
 };
 
 const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string) => void }) => {
-    const { commands, addGroup, addCommand, clearAll, importCommands, exportCommands, setAllCommands, deleteEntity, updateEntity } = useCommandManager();
+    const {
+        commands, addGroup, addCommand, clearAll, importCommands, exportCommands,
+        setAllCommands, deleteEntity, deleteEntities, updateEntity, duplicateEntity,
+        undo, redo, canUndo, canRedo
+    } = useCommandManager();
+
     const { activeSessionId, sessions, writeToSession, publishMqtt } = useSession();
     const [showMenu, setShowMenu] = useState(false);
     const [editingItem, setEditingItem] = useState<CommandEntity | null>(null);
-    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, item: CommandEntity } | null>(null);
+    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, item: CommandEntity | null } | null>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
+    const [clipboard, setClipboard] = useState<CommandEntity | null>(null);
+
+    // Global Key Bindings
+    // Global Key Bindings
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isInput = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '');
+            if (isInput) return;
+
+            // Undo / Redo
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    if (canRedo) redo();
+                } else {
+                    if (canUndo) undo();
+                }
+                return;
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                if (canRedo) redo();
+                return;
+            }
+
+            // Copy
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+                e.preventDefault();
+                if (lastSelectedId) {
+                    const item = commands.find(c => c.id === lastSelectedId);
+                    if (item) setClipboard(item);
+                }
+                return;
+            }
+
+            // Paste
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+                e.preventDefault();
+                if (clipboard) {
+                    let targetId: string | undefined = undefined;
+                    // If selection exists, paste effectively into proper context
+                    if (lastSelectedId) {
+                        const sel = commands.find(c => c.id === lastSelectedId);
+                        if (sel?.type === 'group') {
+                            targetId = sel.id; // Into selected group
+                        } else if (sel) {
+                            targetId = sel.parentId || undefined; // Next to selected item
+                        }
+                    }
+                    duplicateEntity(clipboard.id, targetId);
+                }
+                return;
+            }
+
+            // Delete
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selectedIds.size > 0) {
+                    deleteEntities(Array.from(selectedIds));
+                    setSelectedIds(new Set());
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedIds, lastSelectedId, clipboard, commands, undo, redo, canUndo, canRedo, deleteEntities, duplicateEntity]);
+
+    // Selection Handler
+    const handleItemClick = (e: React.MouseEvent, item: CommandEntity) => {
+        e.stopPropagation();
+        let newSelection = new Set(selectedIds);
+
+        if (e.ctrlKey || e.metaKey) {
+            // Toggle
+            if (newSelection.has(item.id)) {
+                newSelection.delete(item.id);
+            } else {
+                newSelection.add(item.id);
+                setLastSelectedId(item.id);
+            }
+        } else if (e.shiftKey && lastSelectedId) {
+            // Range Selection
+            // 1. Flatten visible items in visual order
+            const getVisibleItems = (parentId?: string | null): CommandEntity[] => {
+                // Handle Root: parentId can be undefined or null
+                const effectiveParentId = parentId === undefined ? null : parentId;
+
+                const children = commands.filter(c => c.parentId === effectiveParentId || (effectiveParentId === null && !c.parentId));
+                let flat: CommandEntity[] = [];
+                for (const child of children) {
+                    flat.push(child);
+                    if (child.type === 'group' && (child.isOpen ?? true)) {
+                        flat = [...flat, ...getVisibleItems(child.id)];
+                    }
+                }
+                return flat;
+            };
+
+            const visibleItems = getVisibleItems(undefined);
+            const startIndex = visibleItems.findIndex(i => i.id === lastSelectedId);
+            const endIndex = visibleItems.findIndex(i => i.id === item.id);
+
+            if (startIndex !== -1 && endIndex !== -1) {
+                const start = Math.min(startIndex, endIndex);
+                const end = Math.max(startIndex, endIndex);
+                const range = visibleItems.slice(start, end + 1);
+                range.forEach(i => newSelection.add(i.id));
+            }
+        } else {
+            // Single Select
+            newSelection = new Set([item.id]);
+            setLastSelectedId(item.id);
+        }
+
+        setSelectedIds(newSelection);
+    };
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -237,17 +371,14 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
             return;
         }
 
-        let data: Uint8Array | string = cmd.payload;
-
         try {
-            if (cmd.html && cmd.tokens && Object.keys(cmd.tokens).length > 0) {
-                const div = document.createElement('div');
-                div.innerHTML = cmd.html;
-                const segments = parseDOM(div);
-                data = compileSegments(segments, cmd.mode, cmd.tokens);
-            } else if (cmd.mode === 'hex') {
-                data = parseHex(cmd.payload);
-            }
+            const { data } = MessagePipeline.process(
+                cmd.payload,
+                cmd.html || null,
+                cmd.mode,
+                cmd.tokens,
+                cmd.lineEnding || ''
+            );
 
             if (session.config.type === 'mqtt') {
                 // MQTT
@@ -261,23 +392,73 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
         }
     };
 
-    const handleContextMenu = (e: React.MouseEvent, item: CommandEntity) => {
+    const handleContextMenu = (e: React.MouseEvent, item?: CommandEntity) => {
         e.preventDefault();
+        e.stopPropagation();
         setContextMenu({
             x: e.clientX,
             y: e.clientY,
-            item
+            item: item || null
         });
+    };
+
+    const handleDuplicate = (item: CommandEntity) => {
+        duplicateEntity(item.id, item.parentId || undefined);
+    };
+
+    const handleCopy = (item: CommandEntity) => {
+        setClipboard(item);
+    };
+
+    const handlePaste = (targetParentId?: string) => {
+        if (!clipboard) return;
+        duplicateEntity(clipboard.id, targetParentId);
     };
 
     const getMenuItems = () => {
         if (!contextMenu) return [];
         const { item } = contextMenu;
-        const items = [
+
+        // Background Menu
+        if (!item) {
+            return [
+                {
+                    label: 'New Command',
+                    icon: <FileText size={13} />,
+                    onClick: () => addCommand({ name: 'New Command', payload: '', mode: 'text', tokens: {}, parentId: undefined })
+                },
+                {
+                    label: 'New Group',
+                    icon: <FolderPlus size={13} />,
+                    onClick: () => addGroup('New Group')
+                },
+                { separator: true },
+                {
+                    label: 'Paste',
+                    icon: <CornerDownLeft size={13} className="rotate-180" />, // Icon placeholder
+                    onClick: () => handlePaste(undefined),
+                    disabled: !clipboard
+                }
+            ];
+        }
+
+        // Item Context Menu
+        const items: any[] = [
             {
                 label: 'Edit',
                 onClick: () => setEditingItem(item)
             },
+            {
+                label: 'Duplicate',
+                icon: <Copy size={13} />,
+                onClick: () => handleDuplicate(item)
+            },
+            {
+                label: 'Copy',
+                icon: <Copy size={13} />,
+                onClick: () => handleCopy(item)
+            },
+            { separator: true },
             {
                 label: 'Delete',
                 icon: <Trash2 size={13} />,
@@ -287,16 +468,23 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
         ];
 
         if (item.type === 'group') {
-            items.unshift({
-                label: 'New Command',
-                icon: <FileText size={13} />,
-                onClick: () => addCommand({ name: 'New Command', payload: '', mode: 'text', tokens: {}, parentId: item.id })
-            });
-            // Can add New Group in Group if we want nested groups
+            // Add paste option for groups
+            items.splice(3, 0, {
+                label: 'Paste',
+                onClick: () => handlePaste(item.id),
+                disabled: !clipboard
+            }, { separator: true });
+
+            items.unshift({ separator: true });
             items.unshift({
                 label: 'New Group',
                 icon: <FolderPlus size={13} />,
                 onClick: () => addGroup('New Group', item.id)
+            });
+            items.unshift({
+                label: 'New Command',
+                icon: <FileText size={13} />,
+                onClick: () => addCommand({ name: 'New Command', payload: '', mode: 'text', tokens: {}, parentId: item.id })
             });
         }
 
@@ -365,6 +553,12 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
                         onSend={(cmd) => handleSend(cmd as CommandItem)}
                         onContextMenu={handleContextMenu}
                         canSend={!!activeSessionId}
+                        selectedIds={selectedIds}
+                        onSelect={handleItemClick}
+                        onClearSelection={() => {
+                            setSelectedIds(new Set());
+                            setLastSelectedId(null);
+                        }}
                     />
                 </DndContext>
             </div>

@@ -10,9 +10,11 @@ interface Props {
     onSend: (item: CommandItem) => void;
     onContextMenu: (e: React.MouseEvent, item: CommandItem) => void;
     disabled?: boolean;
+    selected?: boolean;
+    onSelect?: (e: React.MouseEvent) => void;
 }
 
-export const CommandItemComponent = ({ item, onEdit, onSend, onContextMenu, disabled }: Props) => {
+export const CommandItemComponent = ({ item, onEdit, onSend, onContextMenu, disabled, selected, onSelect }: Props) => {
     // Standard Sortable (for dragging THIS item)
     const {
         attributes,
@@ -59,8 +61,12 @@ export const CommandItemComponent = ({ item, onEdit, onSend, onContextMenu, disa
         <div
             ref={setNodeRef}
             style={{ ...style, transform: undefined }} // Explicitly disable transform
-            className={`group relative flex items-center gap-2 p-1.5 bg-[#2d2d2d] hover:bg-[#2a2d2e] border border-transparent hover:border-[#007acc] rounded-sm select-none`}
-            onDoubleClick={() => onEdit(item)}
+            className={`group relative flex items-center gap-2 p-1.5 border border-transparent rounded-sm select-none ${selected
+                ? 'bg-[#094771] text-white border-[#094771]'
+                : 'bg-[#2d2d2d] hover:bg-[#2a2d2e] hover:border-[#007acc] text-[#cccccc]'
+                }`}
+            onClick={onSelect}
+            onDoubleClick={(e) => { e.stopPropagation(); onEdit(item); }}
             onContextMenu={(e) => onContextMenu(e, item)}
         >
             {/* Top Drop Zone & Line */}
@@ -86,7 +92,7 @@ export const CommandItemComponent = ({ item, onEdit, onSend, onContextMenu, disa
             </div>
 
             {/* Name */}
-            <div className="flex-1 text-[13px] text-[#cccccc] truncate font-medium" title={item.payload}>
+            <div className={`flex-1 text-[13px] truncate font-medium ${selected ? 'text-white' : 'text-[#cccccc]'}`} title={item.payload}>
                 {item.name}
             </div>
 
@@ -102,6 +108,7 @@ export const CommandItemComponent = ({ item, onEdit, onSend, onContextMenu, disa
                             onSend(item);
                         }
                     }}
+                    onDoubleClick={(e) => e.stopPropagation()}
                     disabled={disabled}
                 >
                     <Play size={12} fill="currentColor" />

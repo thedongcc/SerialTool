@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { Send, Plus, Upload, Timer, Flag } from 'lucide-react';
 import { Token, CRCConfig, FlagConfig } from '../../types/token';
 import { TokenConfigPopover } from './TokenConfigPopover';
-import { parseDOM, compileSegments } from '../../utils/InputParser';
+import { MessagePipeline } from '../../services/MessagePipeline';
 
 interface SerialInputProps {
     onSend: (data: string | Uint8Array, mode: 'text' | 'hex') => void;
@@ -291,27 +291,15 @@ export const SerialInput = ({
 
         console.log('[SerialInput] handleSend tokens:', tokens);
 
-        const segments = parseDOM(inputRef.current);
-        let data = compileSegments(segments, mode, tokens);
+        const { data } = MessagePipeline.process(
+            inputRef.current.innerText,
+            inputRef.current.innerHTML,
+            mode,
+            tokens,
+            lineEnding
+        );
 
         if (data.length === 0) return;
-
-        // Append line ending if applicable
-        const shouldAddLineEnding = mode === 'text' && lineEnding;
-        if (shouldAddLineEnding) {
-            const ending = lineEnding;
-            if (typeof data === 'string') {
-                data += ending;
-            } else if (data instanceof Uint8Array) {
-                // If it was compiled to Uint8Array (e.g. valid tokens were present), append line ending bytes
-                const encoder = new TextEncoder();
-                const leBytes = encoder.encode(ending!);
-                const newData = new Uint8Array(data.length + leBytes.length);
-                newData.set(data);
-                newData.set(leBytes, data.length);
-                data = newData;
-            }
-        }
 
         // Send data with current mode
         onSend(data, mode);

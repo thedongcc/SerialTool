@@ -1,6 +1,7 @@
 import { type ReactNode, useState, useRef, useEffect } from 'react';
 import { Files, Search, GitGraph, Box, Settings, User, Monitor, Check, Terminal } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { usePluginManager } from '../../context/PluginContext';
 
 interface ActivityItemProps {
     icon: ReactNode;
@@ -24,6 +25,7 @@ interface ActivityBarProps {
 }
 
 export const ActivityBar = ({ activeView, onViewChange }: ActivityBarProps) => {
+    const { plugins } = usePluginManager();
     const { theme, setTheme } = useTheme();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [activeSubmenu, setActiveSubmenu] = useState<'main' | 'themes'>('main');
@@ -63,11 +65,11 @@ export const ActivityBar = ({ activeView, onViewChange }: ActivityBarProps) => {
                     active={activeView === 'serial'}
                     onClick={() => onViewChange('serial')}
                 />
-                <ActivityItem
+                {/* <ActivityItem
                     icon={<Terminal size={24} strokeWidth={1.5} />}
                     active={activeView === 'commands'}
                     onClick={() => onViewChange('commands')}
-                />
+                /> */}
                 <ActivityItem
                     icon={<GitGraph size={24} strokeWidth={1.5} />}
                     active={activeView === 'git'}
@@ -78,6 +80,19 @@ export const ActivityBar = ({ activeView, onViewChange }: ActivityBarProps) => {
                     active={activeView === 'extensions'}
                     onClick={() => onViewChange('extensions')}
                 />
+
+                {/* Dynamic Plugins */}
+                {plugins.filter(p => p.isActive && p.plugin.sidebarComponent).map(p => {
+                    const Icon = p.plugin.icon;
+                    return (
+                        <ActivityItem
+                            key={p.plugin.id}
+                            icon={Icon ? <Icon size={24} /> : <Box size={24} />}
+                            active={activeView === p.plugin.id}
+                            onClick={() => onViewChange(p.plugin.id)}
+                        />
+                    );
+                })}
             </div>
 
             <div className="flex flex-col gap-0">

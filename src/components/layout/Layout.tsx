@@ -9,6 +9,8 @@ import { useEditorLayout } from '../../hooks/useEditorLayout';
 import { useSessionManager } from '../../hooks/useSessionManager';
 import { SessionProvider } from '../../context/SessionContext';
 
+import { PluginProvider } from '../../context/PluginContext';
+
 export const Layout = ({ children }: { children?: ReactNode }) => {
     const [activeView, setActiveView] = useState('explorer');
     const sessionManager = useSessionManager();
@@ -16,22 +18,24 @@ export const Layout = ({ children }: { children?: ReactNode }) => {
 
     return (
         <SessionProvider manager={sessionManager}>
-            <div className="flex flex-col h-screen w-full bg-[var(--vscode-bg)] text-[var(--vscode-fg)] overflow-hidden">
-                <TitleBar />
+            <PluginProvider>
+                <div className="flex flex-col h-screen w-full bg-[var(--vscode-bg)] text-[var(--vscode-fg)] overflow-hidden">
+                    <TitleBar />
+                    <div className="flex-1 flex overflow-hidden">
+                        <ActivityBar activeView={activeView} onViewChange={setActiveView} />
+                        <SideBar activeView={activeView} onViewChange={setActiveView} sessionManager={sessionManager} editorLayout={editorLayout} />
 
-                <div className="flex-1 flex overflow-hidden">
-                    <ActivityBar activeView={activeView} onViewChange={setActiveView} />
-                    <SideBar activeView={activeView} onViewChange={setActiveView} sessionManager={sessionManager} editorLayout={editorLayout} />
+                        <div className="flex-1 flex flex-col min-w-0">
+                            <EditorArea sessionManager={sessionManager} editorLayout={editorLayout} onShowSettings={setActiveView}>{children}</EditorArea>
+                        </div>
 
-                    <div className="flex-1 flex flex-col min-w-0">
-                        <EditorArea sessionManager={sessionManager} editorLayout={editorLayout} onShowSettings={setActiveView}>{children}</EditorArea>
-
-                        <Panel sessionManager={sessionManager} />
+                        <div className="w-[300px] border-l border-[var(--vscode-border)] bg-[var(--vscode-sidebar)] hidden">
+                            {/* <LogViewerForActiveSession /> */}
+                        </div>
                     </div>
+                    <StatusBar />
                 </div>
-
-                <StatusBar />
-            </div>
+            </PluginProvider>
         </SessionProvider>
     );
 };

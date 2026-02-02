@@ -13,10 +13,12 @@ interface Props {
     onSend: (item: CommandEntity) => void;
     onContextMenu: (e: React.MouseEvent, item: CommandEntity) => void;
     canSend: boolean;
+    selectedIds: Set<string>;
+    onSelect: (e: React.MouseEvent, item: CommandEntity) => void;
 }
 
-export const CommandGroupComponent = ({ group, onEdit, onSend, onContextMenu, canSend }: Props) => {
-    const { commands } = useCommandManager();
+export const CommandGroupComponent = ({ group, onEdit, onSend, onContextMenu, canSend, selectedIds, onSelect }: Props) => {
+    const { commands, updateEntity } = useCommandManager();
     const wasAutoOpened = useRef(false);
 
     const {
@@ -52,8 +54,13 @@ export const CommandGroupComponent = ({ group, onEdit, onSend, onContextMenu, ca
         opacity: isDragging ? 0.3 : 1
     };
 
-    const [isOpen, setIsOpen] = useState(group.isOpen ?? true);
+    const isOpen = group.isOpen ?? true;
     const children = commands.filter(c => c.parentId === group.id);
+
+    const toggleOpen = (e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        updateEntity(group.id, { isOpen: !isOpen });
+    };
 
     // Auto-Expand / Auto-Collapse Logic
     useEffect(() => {
@@ -62,18 +69,18 @@ export const CommandGroupComponent = ({ group, onEdit, onSend, onContextMenu, ca
             // Expand after delay if closed
             if (!isOpen) {
                 timer = setTimeout(() => {
-                    setIsOpen(true);
+                    updateEntity(group.id, { isOpen: true });
                     wasAutoOpened.current = true;
                 }, 600); // 600ms hover
             }
         } else {
             if (wasAutoOpened.current && !isOverGroup && !isDragging) {
-                setIsOpen(false);
+                updateEntity(group.id, { isOpen: false });
                 wasAutoOpened.current = false;
             }
         }
         return () => clearTimeout(timer);
-    }, [isOverGroup, isOpen, isDragging]);
+    }, [isOverGroup, isOpen, isDragging, group.id, updateEntity]);
 
     return (
         <div
@@ -111,22 +118,33 @@ export const CommandGroupComponent = ({ group, onEdit, onSend, onContextMenu, ca
                     {/* 
                         Header Content 
                     */}
-                    <div className="flex items-center gap-2 p-1.5 border border-transparent hover:border-[#3c3c3c] relative z-20">
-                        <div {...attributes} {...listeners} className="text-[#666] cursor-grab active:cursor-grabbing hover:text-[#999]">
+                    <div
+                        className={`flex items-center gap-2 p-1.5 border border-transparent rounded-sm cursor-pointer select-none relative z-20 ${selectedIds.has(group.id) ? 'bg-[#094771] text-white' : 'hover:bg-[#2a2d2e] hover:border-[#3c3c3c]'
+                            }`}
+                        onClick={(e) => onSelect(e, group)}
+                        onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            toggleOpen();
+                        }}
+                    >
+                        <div {...attributes} {...listeners} className={`cursor-grab active:cursor-grabbing ${selectedIds.has(group.id) ? 'text-white' : 'text-[#666] hover:text-[#999]'}`}>
                             <GripVertical size={12} />
                         </div>
 
                         <div
-                            className="flex items-center gap-1 cursor-pointer flex-1"
-                            onClick={() => setIsOpen(!isOpen)}
+                            className="cursor-pointer p-0.5 rounded hover:bg-black/10"
+                            onClick={toggleOpen}
                         >
-                            <div className="text-[#dcb67a]">
+                            <div className={selectedIds.has(group.id) ? 'text-white' : 'text-[#dcb67a]'}>
                                 {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                             </div>
-                            <div className="text-[#dcb67a]">
+                        </div>
+
+                        <div className="flex items-center gap-1 flex-1 overflow-hidden">
+                            <div className={selectedIds.has(group.id) ? 'text-white' : 'text-[#dcb67a]'}>
                                 <Folder size={14} fill="currentColor" fillOpacity={0.2} />
                             </div>
-                            <div className="flex-1 text-[13px] text-[#cccccc] font-bold truncate">
+                            <div className={`flex-1 text-[13px] font-bold truncate ${selectedIds.has(group.id) ? 'text-white' : 'text-[#cccccc]'}`}>
                                 {group.name}
                             </div>
                         </div>
@@ -143,6 +161,8 @@ export const CommandGroupComponent = ({ group, onEdit, onSend, onContextMenu, ca
                             onContextMenu={onContextMenu}
                             dropIndicator={null}
                             canSend={canSend}
+                            selectedIds={selectedIds}
+                            onSelect={onSelect}
                         />
                     </div>
                 )}
