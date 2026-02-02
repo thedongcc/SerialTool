@@ -86,7 +86,14 @@ export const MqttMonitor = ({ session, onShowSettings, onPublish }: MqttMonitorP
 
                         {/* Payload */}
                         <span className="text-[#d4d4d4] break-all whitespace-pre-wrap">
-                            {typeof log.data === 'string' ? log.data : `[Binary ${log.data.length} bytes]`}
+                            {(() => {
+                                if (typeof log.data === 'string') return log.data;
+                                try {
+                                    return new TextDecoder().decode(log.data);
+                                } catch (e) {
+                                    return `[Binary ${log.data.length} bytes]`;
+                                }
+                            })()}
                         </span>
                     </div>
                 ))}

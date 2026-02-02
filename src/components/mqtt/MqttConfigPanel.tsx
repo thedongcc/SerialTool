@@ -44,14 +44,27 @@ export const MqttConfigPanel = ({ config, isConnected, onUpdate, onConnectToken,
                         />
                     </div>
 
-                    {/* Protocol + Port */}
+                    {/* Protocol + Port + Path */}
                     <div className="flex gap-2">
-                        <div className="flex flex-col gap-1 w-1/2">
+                        <div className="flex flex-col gap-1 w-[80px] shrink-0">
                             <label className="text-[11px] text-[#969696]">Protocol</label>
                             <select
                                 className="w-full bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1.5 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
                                 value={config.protocol}
-                                onChange={(e) => onUpdate({ protocol: e.target.value as any })}
+                                onChange={(e) => {
+                                    const newProto = e.target.value as any;
+                                    let newPort = config.port;
+
+                                    // Auto-switch port if current port is a standard one
+                                    const standards: Record<string, number> = { tcp: 1883, ssl: 8883, ws: 8083, wss: 8084 };
+                                    const isStandard = Object.values(standards).includes(config.port);
+
+                                    if (isStandard || config.port === 0) {
+                                        newPort = standards[newProto] || 1883;
+                                    }
+
+                                    onUpdate({ protocol: newProto, port: newPort });
+                                }}
                                 disabled={isConnected}
                             >
                                 {['tcp', 'ws', 'wss', 'ssl'].map(p => (
@@ -59,7 +72,7 @@ export const MqttConfigPanel = ({ config, isConnected, onUpdate, onConnectToken,
                                 ))}
                             </select>
                         </div>
-                        <div className="flex flex-col gap-1 w-1/2">
+                        <div className="flex flex-col gap-1 w-[70px] shrink-0">
                             <label className="text-[11px] text-[#969696]">Port</label>
                             <input
                                 type="number"
@@ -69,6 +82,18 @@ export const MqttConfigPanel = ({ config, isConnected, onUpdate, onConnectToken,
                                 disabled={isConnected}
                             />
                         </div>
+                        {(config.protocol === 'ws' || config.protocol === 'wss') && (
+                            <div className="flex flex-col gap-1 flex-1 min-w-0">
+                                <label className="text-[11px] text-[#969696]">Path</label>
+                                <input
+                                    className="w-full bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1.5 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
+                                    placeholder="/mqtt"
+                                    value={config.path || ''}
+                                    onChange={(e) => onUpdate({ path: e.target.value })}
+                                    disabled={isConnected}
+                                />
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex gap-2">

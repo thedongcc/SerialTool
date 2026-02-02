@@ -224,7 +224,26 @@ function createWindow() {
       }
 
       const protocol = config.protocol || 'tcp';
-      const url = `${protocol}://${config.host}:${config.port}`;
+      let host = config.host;
+      // Handle case where user inputs "protocol://host" in the host field
+      if (host && host.includes('://')) {
+        try {
+          // If strictly valid URL
+          const urlObj = new URL(host);
+          host = urlObj.hostname;
+        } catch (e) {
+          // Fallback split
+          host = host.split('://')[1];
+        }
+      }
+
+      let url = `${protocol}://${host}:${config.port}`;
+      if (protocol === 'ws' || protocol === 'wss') {
+        const rawPath = config.path || '/mqtt';
+        const path = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+        url += path;
+      }
+
       const options = {
         clientId: config.clientId,
         username: config.username,
@@ -233,46 +252,84 @@ function createWindow() {
         clean: config.cleanSession !== undefined ? config.cleanSession : true,
         connectTimeout: (config.connectTimeout || 30) * 1000,
         reconnectPeriod: config.autoReconnect ? 1000 : 0,
+        // WS Options for Node.js compatibility
+        wsOptions: {
+          origin: 'http://localhost', // Many brokers reject WS without Origin
+          headers: {
+            'User-Agent': `SerialTool/${app.getVersion()}`
+          }
+        }
       };
 
       console.log(`[MQTT] Connecting to ${url}`, options);
-      const client = mqtt.connect(url, options);
 
-      client.on('connect', () => {
-        console.log(`[MQTT] Connected: ${connectionId}`);
-        mqttClients.set(connectionId, client);
-        resolve({ success: true });
-        if (!win?.isDestroyed()) win?.webContents.send('mqtt:status', { connectionId, status: 'connected' });
+      let initialConnectHandled = false;
+      let client: any = null;
 
-        // Restore subscriptions if any?
-        // Frontend handles re-subscription logic usually, or we can pass them in connect
-        if (config.topics && Array.isArray(config.topics)) {
-          config.topics.forEach((t: string) => client.subscribe(t));
+      try {
+        client = mqtt.connect(url, options);
+      } catch (err: any) {
+        // Synchronous error (e.g. invalid URL)
+        console.error(`[MQTT] Sync Error ${connectionId}:`, err);
+        return resolve({ success: false, error: err.message });
+      }
+
+      const handleInitialSuccess = () => {
+        if (!initialConnectHandled) {
+          initialConnectHandled = true;
+          mqttClients.set(connectionId, client);
+          resolve({ success: true });
+          if (!win?.isDestroyed()) win?.webContents.send('mqtt:status', { connectionId, status: 'connected' });
+
+          // Restore subscriptions if any
+          if (config.topics && Array.isArray(config.topics)) {
+            config.topics.forEach((t: string) => client.subscribe(t));
+          }
         }
-      });
+      };
+
+      const handleInitialError = (err: string) => {
+        if (!initialConnectHandled) {
+          initialConnectHandled = true;
+          // If we fail initially, ensure we clean up if we aren't auto-reconnecting (or even if we are, we want to tell UI it failed NOW)
+          // For UI "Connect" button, we generally expect a success/fail result.
+          // If autoReconnect is true, we could arguably leave it. But users usually expect "Connected" or "Failed" on click.
+          // So we force fail the promise.
+          client.end(true);
+          resolve({ success: false, error: err });
+        }
+      };
+
+      client.on('connect', handleInitialSuccess);
 
       client.on('message', (topic: string, message: Buffer) => {
         if (!win?.isDestroyed()) {
-          win?.webContents.send('mqtt:message', { connectionId, topic, payload: message }); // Send Buffer
+          win?.webContents.send('mqtt:message', { connectionId, topic, payload: message });
         }
       });
 
       client.on('error', (err: Error) => {
         console.error(`[MQTT] Error ${connectionId}:`, err);
-        if (!win?.isDestroyed()) win?.webContents.send('mqtt:error', { connectionId, error: err.message });
-        // If initial connect fails?
-        // mqtt.connect returns client immediately. 'error' event handles failure.
-        // We might resolve success=false if it happens immediately? 
-        // But mqtt client retries.
+        if (!initialConnectHandled) {
+          handleInitialError(err.message);
+        } else {
+          // Runtime error after connection
+          if (!win?.isDestroyed()) win?.webContents.send('mqtt:error', { connectionId, error: err.message });
+        }
       });
 
       client.on('close', () => {
-        if (!win?.isDestroyed()) win?.webContents.send('mqtt:status', { connectionId, status: 'disconnected' });
+        console.log(`[MQTT] Closed: ${connectionId}`);
+        if (!initialConnectHandled) {
+          // If closed before connect, it's a failure (e.g. timeout)
+          handleInitialError('Connection closed or timed out');
+        } else {
+          if (!win?.isDestroyed()) win?.webContents.send('mqtt:status', { connectionId, status: 'disconnected' });
+        }
       });
 
-      // Handle connection failure for the initial promise?
-      // A bit tricky with mqtt.js as it auto-reconnects. 
-      // We'll rely on events.
+      // Safety timeout in case mqtt.js doesn't emit anything?
+      // mqtt.js connectTimeout should trigger 'error' or 'close'.
     });
   });
 

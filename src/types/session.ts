@@ -46,6 +46,7 @@ export interface MqttSessionConfig extends BaseSessionConfig {
     protocol: 'tcp' | 'ws' | 'wss' | 'ssl';
     host: string;
     port: number;
+    path?: string;
     clientId: string;
     username?: string;
     password?: string;

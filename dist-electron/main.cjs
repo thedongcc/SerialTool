@@ -182,7 +182,21 @@ function createWindow() {
         mqttClients.delete(connectionId);
       }
       const protocol = config.protocol || "tcp";
-      const url = `${protocol}://${config.host}:${config.port}`;
+      let host = config.host;
+      if (host && host.includes("://")) {
+        try {
+          const urlObj = new URL(host);
+          host = urlObj.hostname;
+        } catch (e) {
+          host = host.split("://")[1];
+        }
+      }
+      let url = `${protocol}://${host}:${config.port}`;
+      if (protocol === "ws" || protocol === "wss") {
+        const rawPath = config.path || "/mqtt";
+        const path2 = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+        url += path2;
+      }
       const options = {
         clientId: config.clientId,
         username: config.username,
@@ -190,19 +204,44 @@ function createWindow() {
         keepalive: config.keepAlive || 60,
         clean: config.cleanSession !== void 0 ? config.cleanSession : true,
         connectTimeout: (config.connectTimeout || 30) * 1e3,
-        reconnectPeriod: config.autoReconnect ? 1e3 : 0
+        reconnectPeriod: config.autoReconnect ? 1e3 : 0,
+        // WS Options for Node.js compatibility
+        wsOptions: {
+          origin: "http://localhost",
+          // Many brokers reject WS without Origin
+          headers: {
+            "User-Agent": `SerialTool/${electron.app.getVersion()}`
+          }
+        }
       };
       console.log(`[MQTT] Connecting to ${url}`, options);
-      const client = mqtt.connect(url, options);
-      client.on("connect", () => {
-        console.log(`[MQTT] Connected: ${connectionId}`);
-        mqttClients.set(connectionId, client);
-        resolve({ success: true });
-        if (!(win == null ? void 0 : win.isDestroyed())) win == null ? void 0 : win.webContents.send("mqtt:status", { connectionId, status: "connected" });
-        if (config.topics && Array.isArray(config.topics)) {
-          config.topics.forEach((t) => client.subscribe(t));
+      let initialConnectHandled = false;
+      let client = null;
+      try {
+        client = mqtt.connect(url, options);
+      } catch (err) {
+        console.error(`[MQTT] Sync Error ${connectionId}:`, err);
+        return resolve({ success: false, error: err.message });
+      }
+      const handleInitialSuccess = () => {
+        if (!initialConnectHandled) {
+          initialConnectHandled = true;
+          mqttClients.set(connectionId, client);
+          resolve({ success: true });
+          if (!(win == null ? void 0 : win.isDestroyed())) win == null ? void 0 : win.webContents.send("mqtt:status", { connectionId, status: "connected" });
+          if (config.topics && Array.isArray(config.topics)) {
+            config.topics.forEach((t) => client.subscribe(t));
+          }
         }
-      });
+      };
+      const handleInitialError = (err) => {
+        if (!initialConnectHandled) {
+          initialConnectHandled = true;
+          client.end(true);
+          resolve({ success: false, error: err });
+        }
+      };
+      client.on("connect", handleInitialSuccess);
       client.on("message", (topic, message) => {
         if (!(win == null ? void 0 : win.isDestroyed())) {
           win == null ? void 0 : win.webContents.send("mqtt:message", { connectionId, topic, payload: message });
@@ -210,10 +249,19 @@ function createWindow() {
       });
       client.on("error", (err) => {
         console.error(`[MQTT] Error ${connectionId}:`, err);
-        if (!(win == null ? void 0 : win.isDestroyed())) win == null ? void 0 : win.webContents.send("mqtt:error", { connectionId, error: err.message });
+        if (!initialConnectHandled) {
+          handleInitialError(err.message);
+        } else {
+          if (!(win == null ? void 0 : win.isDestroyed())) win == null ? void 0 : win.webContents.send("mqtt:error", { connectionId, error: err.message });
+        }
       });
       client.on("close", () => {
-        if (!(win == null ? void 0 : win.isDestroyed())) win == null ? void 0 : win.webContents.send("mqtt:status", { connectionId, status: "disconnected" });
+        console.log(`[MQTT] Closed: ${connectionId}`);
+        if (!initialConnectHandled) {
+          handleInitialError("Connection closed or timed out");
+        } else {
+          if (!(win == null ? void 0 : win.isDestroyed())) win == null ? void 0 : win.webContents.send("mqtt:status", { connectionId, status: "disconnected" });
+        }
       });
     });
   });

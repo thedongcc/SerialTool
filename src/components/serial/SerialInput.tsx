@@ -484,7 +484,6 @@ export const SerialInput = ({
                     <div
                         ref={inputRef}
                         contentEditable
-                        className="outline-none font-mono text-[13px] leading-6 tracking-normal"
                         onKeyDown={handleKeyDown}
                         onInput={handleInput}
                         onBlur={() => {
