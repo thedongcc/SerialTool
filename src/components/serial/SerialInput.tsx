@@ -43,11 +43,13 @@ export const SerialInput = ({
     const historyRef = useRef<{ html: string, tokens: Record<string, Token> }[]>([]);
     const historyIndexRef = useRef(-1);
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const tokensRef = useRef(tokens);
+    tokensRef.current = tokens;
 
-    const saveHistory = (force = false) => {
+    const saveHistory = (force = false, tokensOverride?: Record<string, Token>) => {
         if (!inputRef.current) return;
         const currentHTML = inputRef.current.innerHTML;
-        const currentTokens = { ...tokens }; // Capture current tokens
+        const currentTokens = tokensOverride || { ...tokensRef.current };
 
         // Avoid duplicates
         const last = historyRef.current[historyIndexRef.current];
@@ -89,12 +91,8 @@ export const SerialInput = ({
         // Re-bind events
         const spans = inputRef.current.querySelectorAll('span[data-token-id]');
         spans.forEach(span => {
-            (span as HTMLElement).onclick = (e) => {
-                e.stopPropagation();
-                const id = span.getAttribute('data-token-id')!;
-                const rect = span.getBoundingClientRect();
-                setPopover({ id, x: rect.left, y: rect.bottom });
-            };
+            const id = span.getAttribute('data-token-id')!;
+            bindTokenEvents(span as HTMLElement, id);
         });
         // Move cursor to end (simplification)
         const range = document.createRange();
@@ -115,6 +113,9 @@ export const SerialInput = ({
             } else {
                 undo();
             }
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+            e.preventDefault();
+            redo();
         } else if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSend();
@@ -137,7 +138,16 @@ export const SerialInput = ({
                 // Re-bind token click events because innerHTML destroys event listeners
                 const spans = inputRef.current.querySelectorAll('span[data-token-id]');
                 spans.forEach(span => {
-                    (span as HTMLElement).onclick = (e) => {
+                    const el = span as HTMLElement;
+                    el.draggable = true;
+                    el.classList.remove('select-none');
+                    el.ondragstart = (e) => {
+                        if (e.dataTransfer) {
+                            e.dataTransfer.setData('text/html', el.outerHTML);
+                            e.dataTransfer.effectAllowed = 'copyMove';
+                        }
+                    };
+                    el.onclick = (e) => {
                         e.stopPropagation();
                         const id = span.getAttribute('data-token-id')!;
                         const rect = span.getBoundingClientRect();
@@ -163,21 +173,93 @@ export const SerialInput = ({
         }
     };
 
+    const bindTokenEvents = (span: HTMLElement, id: string) => {
+        span.draggable = true;
+        span.classList.remove('select-none');
+
+        // Remove old listeners to avoid stacking if called multiple times (though simple assignment overwrites)
+        span.ondragstart = (e) => {
+            if (e.dataTransfer) {
+                e.dataTransfer.setData('text/html', span.outerHTML);
+                e.dataTransfer.effectAllowed = 'copyMove';
+            }
+            span.classList.add('dragging');
+        };
+
+        span.ondragend = () => {
+            span.classList.remove('dragging');
+        };
+
+        span.onclick = (e) => {
+            e.stopPropagation();
+            const rect = span.getBoundingClientRect();
+            setPopover({ id, x: rect.left, y: rect.bottom });
+        };
+    };
+
     // Sync input handling and cleanup tokens
     const handleInput = () => {
         if (inputRef.current) {
-            // Check for deleted tokens and remove from state
-            const currentIds = new Set(
-                Array.from(inputRef.current.querySelectorAll('[data-token-id]'))
-                    .map(el => el.getAttribute('data-token-id'))
-            );
+            // 1. Re-bind events & De-duplicate tokens (Fix for Drag & Drop)
+            const allSpans = Array.from(inputRef.current.querySelectorAll('span[data-token-id]'));
+            const idMap = new Map<string, HTMLElement[]>();
+
+            allSpans.forEach(s => {
+                const span = s as HTMLElement;
+                const id = span.getAttribute('data-token-id')!;
+
+                // Always re-bind events because drops create fresh elements without listeners
+                bindTokenEvents(span, id);
+
+                if (!idMap.has(id)) idMap.set(id, []);
+                idMap.get(id)!.push(span);
+            });
+
+            // Remove duplicates (Source of drag)
+            idMap.forEach((spans) => {
+                if (spans.length > 1) {
+                    const draggingEl = spans.find(s => s.classList.contains('dragging'));
+                    if (draggingEl) {
+                        draggingEl.remove();
+                    } else {
+                        // Keep last one
+                        for (let i = 0; i < spans.length - 1; i++) {
+                            spans[i].remove();
+                        }
+                    }
+                }
+            });
 
             let nextTokens = { ...tokens };
             let changed = false;
 
-            // We iterate over the *current state* tokens (from closure - might be stale but handleInput usually runs in effect or event).
-            // Actually 'tokens' here is from render.
-            // If we deleted multiple, this works.
+            // 2. Resurrect tokens found in DOM but missing in State (e.g. after Undo)
+            const activeSpans = Array.from(inputRef.current.querySelectorAll('span[data-token-id]'));
+            activeSpans.forEach(s => {
+                const span = s as HTMLElement;
+                const id = span.getAttribute('data-token-id')!;
+
+                if (!nextTokens[id]) {
+                    const type = span.getAttribute('data-token-type') as 'crc' | 'flag';
+                    const configStr = span.getAttribute('data-token-config');
+                    if (type && configStr) {
+                        try {
+                            const config = JSON.parse(configStr);
+                            nextTokens[id] = { id, type, config };
+                            changed = true;
+                            console.log('[SerialInput] Resurrected token:', id);
+                        } catch (e) {
+                            console.error('Failed to resurrect token', id, e);
+                        }
+                    }
+                }
+            });
+
+            // 3. Check for deleted tokens and remove from state
+            const currentIds = new Set(
+                activeSpans.map(el => el.getAttribute('data-token-id'))
+            );
+
             Object.keys(nextTokens).forEach(key => {
                 if (!currentIds.has(key)) {
                     delete nextTokens[key];
@@ -194,7 +276,8 @@ export const SerialInput = ({
 
             // Debounce save history
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-            saveTimeoutRef.current = setTimeout(() => saveHistory(), 500);
+            // Pass nextTokens to ensure we save the state that includes any resurrected/cleaned tokens
+            saveTimeoutRef.current = setTimeout(() => saveHistory(false, nextTokens), 500);
         }
     };
 
@@ -291,8 +374,11 @@ export const SerialInput = ({
             const span = document.createElement('span');
             span.contentEditable = 'false';
             span.setAttribute('data-token-id', id);
+            span.setAttribute('data-token-type', type);
+            span.setAttribute('data-token-config', JSON.stringify(newToken.config));
+            span.draggable = true;
             // Updated style: Non-rounded (sharp), narrow padding, 13px font
-            span.className = 'inline-block bg-[#2d2d2d] text-[#4ec9b0] px-[2px] rounded-none cursor-pointer select-none text-[13px] font-mono align-baseline hover:bg-[#383838] transition-colors';
+            span.className = 'inline-block bg-[#2d2d2d] text-[#4ec9b0] px-[2px] rounded-none cursor-pointer text-[13px] font-mono align-baseline hover:bg-[#383838] transition-colors';
 
             if (type === 'crc') {
                 span.innerText = 'CRC: Modbus';
@@ -300,11 +386,7 @@ export const SerialInput = ({
                 span.innerText = 'Flag: AA';
             }
 
-            span.onclick = (e) => {
-                e.stopPropagation();
-                const rect = span.getBoundingClientRect();
-                setPopover({ id, x: rect.left, y: rect.bottom });
-            };
+            bindTokenEvents(span, id);
 
             const sel = window.getSelection();
             if (sel && sel.rangeCount > 0 && inputRef.current.contains(sel.anchorNode)) {
@@ -320,12 +402,13 @@ export const SerialInput = ({
             }
 
             handleInput();
-            saveHistory(true);
         }
 
         const newTokens = { ...tokens, [id]: newToken };
         setTokens(newTokens);
         notifyStateChange(newTokens);
+        // Save history with the NEW tokens immediately
+        saveHistory(true, newTokens);
     };
 
     const updateTokenConfig = (id: string, newConfig: any) => {
