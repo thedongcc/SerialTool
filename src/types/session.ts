@@ -38,6 +38,7 @@ export interface SerialSessionConfig extends BaseSessionConfig {
         fontSize?: number;
         fontFamily?: 'mono' | 'consolas' | 'courier';
         showTimestamp?: boolean;
+        autoScroll?: boolean;
     };
 }
 

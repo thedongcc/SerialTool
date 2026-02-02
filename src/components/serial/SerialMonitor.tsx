@@ -1,8 +1,9 @@
 import { useRef, useState, useEffect } from 'react';
 import { SessionState, SessionConfig } from '../../types/session';
 import { SerialInput } from './SerialInput';
-import { Settings, Eye, EyeOff, X, Trash2, Download } from 'lucide-react';
+import { Settings, Eye, EyeOff, X, Trash2, Download, ArrowDown } from 'lucide-react';
 import { CRCConfig } from '../../utils/crc';
+
 
 interface SerialMonitorProps {
     session: SessionState;
@@ -28,6 +29,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
     const [encoding, setEncoding] = useState<'utf-8' | 'gbk' | 'ascii'>(uiState.encoding || 'utf-8');
     const [fontSize, setFontSize] = useState<number>(uiState.fontSize || 13);
     const [fontFamily, setFontFamily] = useState<'mono' | 'consolas' | 'courier'>(uiState.fontFamily || 'mono');
+    const [autoScroll, setAutoScroll] = useState(uiState.autoScroll !== undefined ? uiState.autoScroll : true);
     const [showSettingsPanel, setShowSettingsPanel] = useState(false);
     const [showCRCPanel, setShowCRCPanel] = useState(false);
 
@@ -112,10 +114,10 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
     };
 
     useEffect(() => {
-        if (scrollRef.current) {
+        if (scrollRef.current && autoScroll) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [logs]);
+    }, [logs, autoScroll]);
 
     // Auto-connect on mount if configured
 
@@ -383,6 +385,21 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
 
                     {/* Action Buttons */}
                     <div className="flex items-center gap-1 border-l border-[#3c3c3c] pl-2">
+                        <button
+                            className={`p-1 rounded transition-colors ${autoScroll ? 'text-[#4ec9b0] bg-[#1e1e1e]' : 'text-[#969696] hover:text-[#cccccc] hover:bg-[#3c3c3c]'}`}
+                            onClick={() => {
+                                const newState = !autoScroll;
+                                setAutoScroll(newState);
+                                saveUIState({ autoScroll: newState });
+                                // If enabling, scroll to bottom immediately
+                                if (newState && scrollRef.current) {
+                                    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                                }
+                            }}
+                            title={`Auto Scroll: ${autoScroll ? 'On' : 'Off'}`}
+                        >
+                            <ArrowDown size={14} />
+                        </button>
                         <button
                             className="p-1 hover:bg-[#3c3c3c] rounded text-[#969696] hover:text-[#cccccc] transition-colors"
                             onClick={handleSaveLogs}
