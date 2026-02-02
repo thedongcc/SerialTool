@@ -267,7 +267,8 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                                             value={rxCRC.endIndex}
                                             onChange={(e) => updateRxCRC({ endIndex: parseInt(e.target.value) })}
                                         >
-                                            <option value="-1">End (-1)</option>
+                                            <option value="0">End (末尾)</option>
+                                            <option value="-1">-1</option>
                                             <option value="-2">-2</option>
                                             <option value="-3">-3</option>
                                         </select>
@@ -426,10 +427,10 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                     </div>
                 )}
                 {filteredLogs.map((log, index) => (
-                    <div key={index} className={`flex gap-2 mb-1 hover:bg-[#2a2d2e] rounded px-1 group relative ${log.crcStatus === 'error' ? 'bg-[#4b1818] border-l-2 border-[#f48771]' : ''
+                    <div key={index} className={`flex gap-2 mb-1 hover:bg-[#2a2d2e] rounded px-1 group relative border-l-2 ${log.crcStatus === 'error' ? 'bg-[#4b1818] border-[#f48771]' : 'border-transparent'
                         }`}>
                         {showTimestamp && (
-                            <span className="text-[#569cd6] shrink-0 select-none w-[85px]">
+                            <span className="text-[#569cd6] shrink-0 w-[85px]">
                                 {new Date(log.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) + '.' + new Date(log.timestamp).getMilliseconds().toString().padStart(3, '0')}
                             </span>
                         )}
@@ -439,7 +440,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                             }`}>
                             {log.type}
                         </span>
-                        <span className={`whitespace-pre-wrap break-all ${log.type === 'ERROR' ? 'text-[#f48771]' : 'text-[#cccccc]'
+                        <span className={`whitespace-pre-wrap break-all select-text cursor-text ${log.type === 'ERROR' ? 'text-[#f48771]' : 'text-[#cccccc]'
                             }`}>
                             {formatData(log.data, viewMode, encoding)}
                         </span>

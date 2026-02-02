@@ -103,11 +103,12 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                             <label className="text-[11px] text-[#969696]">End</label>
                             <select
                                 className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
-                                value={crcConfig.endIndex ?? -1}
+                                value={crcConfig.endIndex ?? 0}
                                 onChange={e => setConfig({ ...crcConfig, endIndex: parseInt(e.target.value) })}
                                 onKeyDown={handleKeyDown}
                             >
-                                <option value="-1">End (-1)</option>
+                                <option value="0">末尾 (End)</option>
+                                <option value="-1">-1</option>
                                 <option value="-2">-2</option>
                                 <option value="-3">-3</option>
                             </select>

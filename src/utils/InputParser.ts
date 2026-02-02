@@ -72,12 +72,12 @@ export const compileSegments = (
         } else if (segment.type === 'token') {
             const tokenId = segment.id;
             const token = tokens[tokenId];
-            if (!token) continue; // Should not happen
+            if (!token) continue;
 
             if (token.type === 'crc') {
                 const config = token.config as CRCConfig;
 
-                // Assemble current buffer to calculate CRC
+                // Flatten current buffer to handle offsets correctly
                 const currentBuf = new Uint8Array(currentTotalLength);
                 let offset = 0;
                 for (const p of parts) {
@@ -85,22 +85,36 @@ export const compileSegments = (
                     offset += p.length;
                 }
 
-                const dataToCheck = sliceData(currentBuf, config.startIndex, config.endIndex);
-                if (dataToCheck.length === 0) {
-                    // Handle empty check if needed
+                // Determine Insertion/Split Point based on endIndex (0, -1, -2...)
+                const offsetParam = config.endIndex || 0;
+                let splitIdx = currentBuf.length;
+                if (offsetParam < 0) {
+                    splitIdx = Math.max(0, currentBuf.length + offsetParam);
                 }
+
+                // Head is what we checksum (subject to startIndex validation)
+                const head = currentBuf.slice(0, splitIdx);
+                const tail = currentBuf.slice(splitIdx);
+
+                // Calculate CRC on the Head
+                // sliceData handles startIndex and 0 (End) logic
+                const dataToCheck = sliceData(head, config.startIndex || 0, 0);
                 const crcBytes = calculateCRC(dataToCheck, config.algorithm);
 
+                // Re-assemble parts: [Head, CRC, Tail]
+                parts.length = 0;
+                if (head.length > 0) parts.push(head);
                 parts.push(crcBytes);
-                currentTotalLength += crcBytes.length;
+                if (tail.length > 0) parts.push(tail);
+
+                currentTotalLength = head.length + crcBytes.length + tail.length;
+
             } else if (token.type === 'flag') {
                 const config = token.config as FlagConfig;
-                // Parse hex content of the flag
                 const bytes = parseHex(config.hex || '');
                 parts.push(bytes);
                 currentTotalLength += bytes.length;
             }
-            // Add other token types here (e.g. AutoInc)
         }
     }
 

@@ -11,38 +11,26 @@ export const sliceData = (data: Uint8Array, start: number, end: number): Uint8Ar
     const actualStart = start < 0 ? data.length + start : start;
     if (actualStart < 0 || actualStart >= data.length) return new Uint8Array(0);
 
-    // Logic: -1 means "End" (include all). 
-    // -2 means "End - 1 byte" (exclude last 1 byte)
-    // -3 means "End - 2 bytes" (exclude last 2 bytes)
-    // If end >= 0, it means absolute index (exclusive? or length?)
-    // User interface is "Start" and "End". 
-    // Usually Start=0, End=2 means 0, 1. (Length 2).
-    // But "End" usually implies "Index of end".
-    // Let's assume positive end is *Length*? Or Index?
-    // Given the previous code used `config.length`, and now we use `endIndex`.
-    // The user options are -1, -2, -3.
-    // If user provides positive number (e.g. from parsing), how to enable?
-    // Since UI only gives -1, -2, -3 (dropdown), we focus on those.
-    // If we want positive length, we might need another mode.
-    // But based on user request "Select -1 -2 -3", I will implement that.
-
     let actualEnd = data.length;
-    if (end === -1) {
+
+    // 0 means "To the end" (Include everything)
+    if (end === 0) {
         actualEnd = data.length;
-    } else if (end < -1) {
-        actualEnd = data.length + (end + 1); // -2 -> len - 1
+    } else if (end < 0) {
+        // Negative: Offset from end (e.g. -1 excludes last byte)
+        actualEnd = data.length + end;
     } else {
-        // Positive value: treat as absolute index (exclusive) or length?
-        // Let's treat as Length for backward compat if any, or just absolute index.
-        // Assuming Length for positive is easier.
-        // But the field is called "endIndex".
-        // Let's treat it as Length if positive?
-        // "默认为End(末尾),可选-1 -2 -3".
-        // I'll stick to negative logic. For positive, I'll treat as length for now.
+        // Positive: Treat as Length (Legacy/Standard)
         actualEnd = start + end;
     }
 
-    return data.slice(actualStart, Math.max(actualStart, actualEnd));
+    // Safety clamp (Ensure we don't go beyond buffer)
+    if (actualEnd > data.length) actualEnd = data.length;
+
+    // Ensure End >= Start
+    if (actualEnd <= actualStart) return new Uint8Array(0);
+
+    return data.slice(actualStart, actualEnd);
 };
 
 /**
@@ -168,28 +156,35 @@ export const validateRXCRC = (data: Uint8Array, config: CRCConfig): boolean => {
 
     if (data.length <= crcLen) return false;
 
-    // The logic: 
-    // 1. Separate presumed CRC at end (or wherever?)
-    //    Usually RX val checks if the LAST bytes match the CRC of the PRECEDING bytes.
-    //    Or user might specify "Start=0, Length=N" and expects CRC to be at N (or N+1..)?
-    //    Standard generic RX checker usually assumes CRC is at the END of the packet.
+    // Determine expected CRC position mirroring TX logic
+    // TX Logic: Head(0..Split) + CRC + Tail(Split..)
+    // Split point determined by config.endIndex.
+    // If endIndex=0, Tail=0. If endIndex=-1, Tail=1 byte.
 
-    const content = data.slice(0, data.length - crcLen);
-    const receivedCRC = data.slice(data.length - crcLen);
+    let tailLen = 0;
+    const offset = config.endIndex || 0;
 
-    // If config.length is 0, we check "All content".
-    // If config.length is > 0, we check only that subset, but then compare against what? The END of the whole packet?
-    // Or does the user mean "The packet is Start+Length+CRC"?
-    // The current UI binds RX check to the *received data chunk*.
-    // If we receive "A B C CRC", and configure Start=0, Length=0 -> Check A B C.
+    if (offset < 0) {
+        tailLen = Math.abs(offset);
+    }
 
-    // We pass `content` (data - crc) to sliceData.
-    // effective length = config.length === 0 ? content.length : config.length.
-    const targetData = sliceData(content, config.startIndex, config.endIndex);
+    // Ensure packet is large enough for CRC + Tail
+    if (data.length < crcLen + tailLen) return false;
 
-    if (targetData.length === 0) return false;
+    // Extract CRC
+    const crcStart = data.length - tailLen - crcLen;
+    const receivedCRC = data.slice(crcStart, crcStart + crcLen);
 
-    const expectedCRC = calculateCRC(targetData, config.algorithm);
+    // The "Head" (Subject of Checksum) is everything before the CRC
+    // TX Logic verifies checks on `sliceData(head, ...)`
+    const head = data.slice(0, crcStart);
+
+    // Apply startIndex on the Head content
+    const dataToCheck = sliceData(head, config.startIndex || 0, 0);
+
+    if (dataToCheck.length === 0) return false;
+
+    const expectedCRC = calculateCRC(dataToCheck, config.algorithm);
 
     if (expectedCRC.length !== receivedCRC.length) return false;
     for (let i = 0; i < expectedCRC.length; i++) {
