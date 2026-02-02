@@ -3,6 +3,7 @@ import { X, LayoutTemplate, Plus, Columns } from 'lucide-react';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { SerialMonitor } from '../serial/SerialMonitor';
 import { MqttMonitor } from '../mqtt/MqttMonitor';
+import { SettingsEditor } from '../settings/SettingsEditor';
 import { MqttSessionConfig } from '../../types/session';
 import { useSessionManager } from '../../hooks/useSessionManager';
 import { useEditorLayout } from '../../hooks/useEditorLayout';
@@ -261,6 +262,14 @@ export const EditorArea = ({ children, sessionManager, editorLayout, onShowSetti
                                                     Session not found or closed.
                                                 </div>
                                             );
+
+                                            if (session.config.type === 'settings') {
+                                                return (
+                                                    <div className="absolute inset-0">
+                                                        <SettingsEditor />
+                                                    </div>
+                                                );
+                                            }
 
                                             if (session.config.type === 'mqtt') {
                                                 return <MqttMonitor

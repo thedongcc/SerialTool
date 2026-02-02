@@ -22,9 +22,10 @@ const ActivityItem = ({ icon, active, onClick, className }: ActivityItemProps) =
 interface ActivityBarProps {
     activeView: string;
     onViewChange: (view: string) => void;
+    onOpenSettings?: () => void;
 }
 
-export const ActivityBar = ({ activeView, onViewChange }: ActivityBarProps) => {
+export const ActivityBar = ({ activeView, onViewChange, onOpenSettings }: ActivityBarProps) => {
     const { plugins } = usePluginManager();
     const { theme, setTheme } = useTheme();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -116,7 +117,10 @@ export const ActivityBar = ({ activeView, onViewChange }: ActivityBarProps) => {
                             {activeSubmenu === 'main' ? (
                                 <>
                                     <div className="px-3 py-1.5 text-[13px] hover:bg-[var(--vscode-list-hover)] cursor-pointer flex items-center justify-between text-[var(--vscode-fg)]"
-                                        onClick={() => alert('Settings not implemented')}>
+                                        onClick={() => {
+                                            if (onOpenSettings) onOpenSettings();
+                                            resetMenu();
+                                        }}>
                                         <span>Settings</span>
                                         <span className="text-[11px] opacity-60">Ctrl+,</span>
                                     </div>

@@ -3,6 +3,19 @@ import { SessionState, SessionConfig } from '../../types/session';
 import { SerialInput } from './SerialInput';
 import { Settings, Eye, EyeOff, X, Trash2, Download, ArrowDown } from 'lucide-react';
 import { CRCConfig } from '../../utils/crc';
+import { useSettings } from '../../context/SettingsContext';
+
+const formatTimestamp = (ts: number, fmt: string) => {
+    const date = new Date(ts);
+    const pad = (n: number, w: number = 2) => n.toString().padStart(w, '0');
+
+    // Simple Replacer
+    return fmt
+        .replace('HH', pad(date.getHours()))
+        .replace('mm', pad(date.getMinutes()))
+        .replace('ss', pad(date.getSeconds()))
+        .replace('SSS', pad(date.getMilliseconds(), 3));
+};
 
 
 interface SerialMonitorProps {
@@ -16,6 +29,7 @@ interface SerialMonitorProps {
 }
 
 export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig, onInputStateChange, onClearLogs, onConnectRequest }: SerialMonitorProps) => {
+    const { config: themeConfig } = useSettings();
     const { logs, isConnected, config } = session;
     const currentPort = config.connection.path;
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -180,7 +194,10 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
     };
 
     return (
-        <div className="absolute inset-0 flex flex-col bg-[#1e1e1e]">
+        <div
+            className="absolute inset-0 flex flex-col bg-[var(--st-rx-bg)] bg-cover bg-center"
+            style={{ backgroundImage: 'var(--st-rx-bg-img)' }}
+        >
             {/* Enhanced Toolbar */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#2b2b2b] bg-[#252526] shrink-0">
                 <div className="text-sm font-medium text-[#cccccc]">
@@ -430,17 +447,20 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                     <div key={index} className={`flex gap-2 mb-1 hover:bg-[#2a2d2e] rounded px-1 group relative border-l-2 ${log.crcStatus === 'error' ? 'bg-[#4b1818] border-[#f48771]' : 'border-transparent'
                         }`}>
                         {showTimestamp && (
-                            <span className="text-[#569cd6] shrink-0 w-[85px]">
-                                {new Date(log.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) + '.' + new Date(log.timestamp).getMilliseconds().toString().padStart(3, '0')}
+                            <span className="text-[var(--st-timestamp)] shrink-0 w-[85px]">
+                                {formatTimestamp(log.timestamp, themeConfig.timestampFormat)}
                             </span>
                         )}
-                        <span className={`font-bold shrink-0 select-none w-[30px] ${log.type === 'TX' ? 'text-[#ce9178]' :
-                            log.type === 'RX' ? 'text-[#6a9955]' :
-                                'text-[#969696]'
+                        <span className={`font-bold shrink-0 select-none w-[30px] ${log.type === 'TX' ? 'text-[var(--st-tx-label)]' :
+                            log.type === 'RX' ? 'text-[var(--st-rx-label)]' :
+                                'text-[var(--st-info-text)]'
                             }`}>
                             {log.type}
                         </span>
-                        <span className={`whitespace-pre-wrap break-all select-text cursor-text ${log.type === 'ERROR' ? 'text-[#f48771]' : 'text-[#cccccc]'
+                        <span className={`whitespace-pre-wrap break-all select-text cursor-text ${log.type === 'TX' ? 'text-[var(--st-tx-text)]' :
+                            log.type === 'RX' ? 'text-[var(--st-rx-text)]' :
+                                log.type === 'ERROR' ? 'text-[var(--st-error-text)]' :
+                                    'text-[var(--st-info-text)]'
                             }`}>
                             {formatData(log.data, viewMode, encoding)}
                         </span>

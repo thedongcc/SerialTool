@@ -49,7 +49,7 @@ export const SerialInput = ({
         content: initialHTML || initialContent,
         editorProps: {
             attributes: {
-                class: 'outline-none text-[#d4d4d4] text-[13px] font-mono whitespace-pre-wrap break-all flex-1 min-h-[40px] overflow-y-auto custom-scrollbar p-2 leading-[22px] [&_p]:m-0 [&_span]:align-middle',
+                class: 'outline-none text-[var(--st-input-text)] text-[13px] font-mono whitespace-pre-wrap break-all flex-1 min-h-[40px] overflow-y-auto custom-scrollbar p-2 leading-[22px] [&_p]:m-0 [&_span]:align-middle',
                 spellcheck: 'false',
             },
         },
@@ -222,8 +222,9 @@ export const SerialInput = ({
             <div className="flex gap-2 min-h-[42px]">
 
                 <div
-                    className="flex-1 bg-[#1e1e1e] border border-[#3c3c3c] rounded-sm focus-within:border-[var(--vscode-focusBorder)] cursor-text flex flex-col"
+                    className="flex-1 bg-[var(--st-input-bg)] border border-[#3c3c3c] rounded-sm focus-within:border-[var(--vscode-focusBorder)] cursor-text flex flex-col bg-cover bg-center"
                     onClick={() => editor?.commands.focus()}
+                    style={{ backgroundImage: 'var(--st-input-bg-img)' }}
                 >
                     <EditorContent editor={editor} className="flex-1 outline-none" />
                 </div>

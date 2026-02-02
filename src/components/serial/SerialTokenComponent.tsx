@@ -33,6 +33,10 @@ export const SerialTokenComponent: React.FC<NodeViewProps> = ({ node, getPos, se
         label = config.name ? `${config.name}: ${display}` : (hex ? `Flag: ${display}` : 'Flag');
     }
 
+    const colorClass = type === 'crc'
+        ? 'text-[var(--st-token-crc)] border-l-[var(--st-token-crc)] hover:border-l-[var(--st-token-crc)] ring-[var(--st-token-crc)]'
+        : 'text-[var(--st-token-flag)] border-l-[var(--st-token-flag)] hover:border-l-[var(--st-token-flag)] ring-[var(--st-token-flag)]';
+
     return (
         <NodeViewWrapper as="span" className="inline-block align-middle select-all mr-1">
             <span
@@ -40,12 +44,12 @@ export const SerialTokenComponent: React.FC<NodeViewProps> = ({ node, getPos, se
                 onClick={handleClick}
                 className={`
                     inline-flex items-center px-1.5 h-[22px] 
-                    bg-[#252526] text-[#4ec9b0] 
+                    bg-[#252526] ${colorClass}
                     text-[13px] font-mono leading-none 
-                    border border-[#3c3c3c] border-l-[3px] hover:border-[#505050] hover:border-l-[#4ec9b0]
+                    border border-[#3c3c3c] border-l-[3px] hover:border-[#505050]
                     cursor-pointer whitespace-nowrap overflow-hidden
                     transition-all rounded-[3px]
-                    ${selected ? 'ring-1 ring-[#4ec9b0] border-[#4ec9b0]' : ''}
+                    ${selected ? 'ring-1 border-transparent' : ''}
                     shadow-sm
                 `}
                 title="Click to configure, Drag to move"
