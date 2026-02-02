@@ -1,5 +1,5 @@
 import { type ReactNode, useState, useRef, useEffect } from 'react';
-import { Files, Search, GitGraph, Box, Settings, User, Monitor, Check } from 'lucide-react';
+import { Files, Search, GitGraph, Box, Settings, User, Monitor, Check, Terminal } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 interface ActivityItemProps {
@@ -62,6 +62,11 @@ export const ActivityBar = ({ activeView, onViewChange }: ActivityBarProps) => {
                     icon={<Monitor size={24} strokeWidth={1.5} />}
                     active={activeView === 'serial'}
                     onClick={() => onViewChange('serial')}
+                />
+                <ActivityItem
+                    icon={<Terminal size={24} strokeWidth={1.5} />}
+                    active={activeView === 'commands'}
+                    onClick={() => onViewChange('commands')}
                 />
                 <ActivityItem
                     icon={<GitGraph size={24} strokeWidth={1.5} />}

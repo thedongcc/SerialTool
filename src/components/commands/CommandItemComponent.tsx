@@ -1,0 +1,112 @@
+import { useSortable } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import { Play, FileText, GripVertical } from 'lucide-react';
+import { CommandItem } from '../../types/command';
+
+interface Props {
+    item: CommandItem;
+    onEdit: (item: CommandItem) => void;
+    onSend: (item: CommandItem) => void;
+    onContextMenu: (e: React.MouseEvent, item: CommandItem) => void;
+    disabled?: boolean;
+}
+
+export const CommandItemComponent = ({ item, onEdit, onSend, onContextMenu, disabled }: Props) => {
+    // Standard Sortable (for dragging THIS item)
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: item.id });
+
+    // Sub-Droppables for Top/Bottom Line detection
+    // Note: We don't need 'data' here unless we use it in global CollisionStrategy,
+    // but the simple 'isOver' local state is enough for visual feedback!
+    const { setNodeRef: setTopRef, isOver: isOverTop } = useDroppable({
+        id: `${item.id}-top`,
+        data: { type: 'item-top', item }
+    });
+
+    const { setNodeRef: setBottomRef, isOver: isOverBottom } = useDroppable({
+        id: `${item.id}-bottom`,
+        data: { type: 'item-bottom', item }
+    });
+
+    const style = {
+        // DISABLE transform for vertical axis to prevent shifting (File explorer style)
+        // Keep scale/z-index if needed (but usually sortable handles z-index via overlay)
+        // We only apply transform if dragging (or maybe just opacity)
+        // Actually, if we disable transform, visual sorting stops.
+        // We use opacity 0 for the "ghost" effectively.
+        transform: CSS.Transform.toString(transform), // Wait, if I keep this, list moves. 
+        // User wants LINE, implying NO SHIFT.
+        // So: remove transform.
+        // transform: undefined, 
+        transition,
+        opacity: isDragging ? 0.3 : 1
+    };
+
+    // However, if I remove transform, dnd-kit assumes I am rendering list as is.
+    // The "Placeholder" will basically be "in place" if I sort? 
+    // No, if I don't move items, the gap doesn't open.
+    // That's exactly what we want.
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={{ ...style, transform: undefined }} // Explicitly disable transform
+            className={`group relative flex items-center gap-2 p-1.5 bg-[#2d2d2d] hover:bg-[#2a2d2e] border border-transparent hover:border-[#007acc] rounded-sm select-none`}
+            onDoubleClick={() => onEdit(item)}
+            onContextMenu={(e) => onContextMenu(e, item)}
+        >
+            {/* Top Drop Zone & Line */}
+            <div ref={setTopRef} className="absolute top-0 left-0 right-0 h-1/2 z-10 pointer-events-none group-hover/drag:pointer-events-auto" />
+            {isOverTop && !isDragging && (
+                <div className="absolute top-[-1px] left-0 right-0 h-[2px] bg-[#007acc] z-20 pointer-events-none shadow-[0_0_4px_#007acc]" />
+            )}
+
+            {/* Bottom Drop Zone & Line */}
+            <div ref={setBottomRef} className="absolute bottom-0 left-0 right-0 h-1/2 z-10 pointer-events-none group-hover/drag:pointer-events-auto" />
+            {isOverBottom && !isDragging && (
+                <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-[#007acc] z-20 pointer-events-none shadow-[0_0_4px_#007acc]" />
+            )}
+
+            {/* Drag Handle */}
+            <div {...attributes} {...listeners} className="text-[#666] cursor-grab active:cursor-grabbing hover:text-[#999] opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                <GripVertical size={12} />
+            </div>
+
+            {/* Icon */}
+            <div className="text-[#4ec9b0]">
+                <FileText size={14} />
+            </div>
+
+            {/* Name */}
+            <div className="flex-1 text-[13px] text-[#cccccc] truncate font-medium" title={item.payload}>
+                {item.name}
+            </div>
+
+            {/* Send Button */}
+            <div className={`transition-opacity relative z-20 ${disabled ? 'opacity-0 group-hover:opacity-40' : 'opacity-0 group-hover:opacity-100'}`}>
+                <button
+                    className={`p-1 rounded transition-colors ${disabled ? 'cursor-not-allowed text-[#666]' : 'hover:bg-[#007acc] text-[#cccccc] hover:text-white'}`}
+                    title={disabled ? "No active session" : "Send Command"}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (!disabled) {
+                            console.log('Send button clicked via UI', item.name);
+                            onSend(item);
+                        }
+                    }}
+                    disabled={disabled}
+                >
+                    <Play size={12} fill="currentColor" />
+                </button>
+            </div>
+        </div>
+    );
+};
