@@ -57,6 +57,11 @@ div[data-direction="vertical"]:hover {
   --vscode-textLink-foreground: #3794ff;
 
   --vscode-activitybar-inactive-fg: #858585;
+
+  /* Menu - Dark */
+  --vscode-menu-bg: #252526;
+  --vscode-menu-fg: #cccccc;
+  --vscode-menu-border: #454545;
 }
 
 .theme-light {
@@ -99,6 +104,11 @@ div[data-direction="vertical"]:hover {
 
   --vscode-activitybar-inactive-fg: #858585;
   /* Keep dark style due to dark bar */
+  
+  /* Menu - Light */
+  --vscode-menu-bg: #ffffff;
+  --vscode-menu-fg: #333333;
+  --vscode-menu-border: #cecece;
 }
 
 .theme-hc {
@@ -144,6 +154,11 @@ div[data-direction="vertical"]:hover {
 
   --vscode-activitybar-inactive-fg: #ffffff;
   /* HC uses white usually with opacity or border */
+  
+  /* Menu - HC */
+  --vscode-menu-bg: #000000;
+  --vscode-menu-fg: #ffffff;
+  --vscode-menu-border: #ffffff;
 }
 
 .theme-one-dark-vivid {
@@ -186,6 +201,11 @@ div[data-direction="vertical"]:hover {
   --vscode-textLink-foreground: #61afef;
 
   --vscode-activitybar-inactive-fg: #5c6370;
+  
+  /* Menu - One Dark */
+  --vscode-menu-bg: #282c34;
+  --vscode-menu-fg: #abb2bf;
+  --vscode-menu-border: #181a1f; 
 }
 
 body {
