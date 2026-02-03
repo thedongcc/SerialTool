@@ -245,6 +245,14 @@ export const useSessionManager = () => {
                 topics: [],
                 ...config
             } as any;
+        } else if (type === 'settings') {
+            baseConfig = {
+                id: newId,
+                name: 'Settings',
+                type: 'settings',
+                autoConnect: false,
+                ...config
+            } as any;
         } else {
             // Default to Serial
             baseConfig = {

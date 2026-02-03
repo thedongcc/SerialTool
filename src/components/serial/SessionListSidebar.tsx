@@ -92,7 +92,7 @@ export const SessionListSidebar = ({ sessionManager, editorLayout }: SessionList
                         No saved sessions.<br />Click '+' to create one.
                     </div>
                 )}
-                {sessionManager.savedSessions.map(session => (
+                {sessionManager.savedSessions.filter(s => s.type !== 'settings').map(session => (
                     <div
                         key={session.id}
                         className={`px-4 py-1.5 text-[13px] hover:bg-[var(--vscode-list-hover)] cursor-pointer flex items-center gap-2 group border-l-2 ${sessionManager.activeSessionId === session.id ? 'border-[var(--vscode-accent)] bg-[var(--vscode-list-active)]' : 'border-transparent'}`}

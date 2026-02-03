@@ -1,5 +1,22 @@
 @import "tailwindcss";
 
+/* Force cursor override for react-resizable-panels Separator with HIGH SPECIFICITY */
+/* Using double attribute selector to increase specificity */
+div[data-direction="horizontal"][data-direction="horizontal"] {
+  cursor: col-resize !important;
+}
+
+div[data-direction="vertical"][data-direction="vertical"] {
+  cursor: row-resize !important;
+}
+
+/* Also target hover explicitly to fight :hover rules */
+div[data-direction="horizontal"]:hover,
+div[data-direction="vertical"]:hover {
+  cursor: inherit !important;
+}
+
+
 :root {
   /* Dark+ (Default) */
   --vscode-bg: #1e1e1e;

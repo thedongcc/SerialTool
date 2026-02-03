@@ -21,16 +21,9 @@ export const Layout = ({ children }: { children?: ReactNode }) => {
         let settingsSession = sessionManager.sessions.find(s => s.config.type === 'settings');
         if (!settingsSession) {
             // Create new settings session
-            // We use a simpler approach since createSession might enforce type
-            // Assuming createSession handles Generic config
-            const newId = await sessionManager.createSession();
-            // We need to UPDATE the config to be settings type because createSession makes a serial session by default?
-            // createSession implementation in useSessionManager needs to support passing config?
-            // Let's check useSessionManager. 
-            // If createSession is hardcoded to 'serial', we might need to update it.
-            // But we can update config immediately.
+            const newId = await sessionManager.createSession('settings');
+
             if (newId) {
-                sessionManager.updateSessionConfig(newId, { type: 'settings', name: 'Settings' } as any);
                 editorLayout.openSession(newId);
                 sessionManager.setActiveSessionId(newId);
             }
