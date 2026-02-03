@@ -120,32 +120,121 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
         return null;
     };
 
-    if (token.type !== 'crc' && token.type !== 'flag') return null;
+    // State for drag and resize
+    // We initialize size.
+    const [size, setSize] = useState({ width: 300, height: 320 });
+    // We initialize pos from props, but allow dragging.
+    const [pos, setPos] = useState({ x: position.x, y: position.y });
 
-    const POPOVER_HEIGHT = 280; // Estimated max height
-    const isOverflow = position.y + POPOVER_HEIGHT > window.innerHeight;
-    const top = isOverflow ? Math.max(10, position.y - POPOVER_HEIGHT - 10) : position.y + 24;
+    // Adjust initial position to fit screen if needed logic moved to effect?
+    // Actually, we can just use the prop position as initial state, but we need to handle "prop changes" if we want to reset.
+    // However, usually popover is remounted.
+    // Let's ensure it doesn't spawn offscreen.
+    useEffect(() => {
+        const POPOVER_HEIGHT = 320;
+        const screenH = window.innerHeight;
+        const screenW = window.innerWidth;
+
+        let newY = position.y + 24;
+        if (newY + POPOVER_HEIGHT > screenH) {
+            newY = Math.max(10, position.y - POPOVER_HEIGHT - 10);
+        }
+        let newX = Math.min(position.x, screenW - 320);
+
+        setPos({ x: newX, y: newY });
+    }, []); // Run once on mount
+
+    // Drag Logic
+    const isDragging = useRef(false);
+    const dragOffset = useRef({ x: 0, y: 0 });
+
+    const handleMouseDownHeader = (e: React.MouseEvent) => {
+        e.preventDefault();
+        isDragging.current = true;
+        dragOffset.current = {
+            x: e.clientX - pos.x,
+            y: e.clientY - pos.y
+        };
+        document.addEventListener('mousemove', handleMouseMoveDrag);
+        document.addEventListener('mouseup', handleMouseUpDrag);
+    };
+
+    const handleMouseMoveDrag = (e: MouseEvent) => {
+        if (!isDragging.current) return;
+        setPos({
+            x: e.clientX - dragOffset.current.x,
+            y: e.clientY - dragOffset.current.y
+        });
+    };
+
+    const handleMouseUpDrag = () => {
+        isDragging.current = false;
+        document.removeEventListener('mousemove', handleMouseMoveDrag);
+        document.removeEventListener('mouseup', handleMouseUpDrag);
+    };
+
+    // Resize Logic
+    const isResizing = useRef(false);
+    const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0 });
+
+    const handleMouseDownResize = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation(); // Don't trigger drag
+        isResizing.current = true;
+        resizeStart.current = {
+            x: e.clientX,
+            y: e.clientY,
+            w: size.width,
+            h: size.height
+        };
+        document.addEventListener('mousemove', handleMouseMoveResize);
+        document.addEventListener('mouseup', handleMouseUpResize);
+    };
+
+    const handleMouseMoveResize = (e: MouseEvent) => {
+        if (!isResizing.current) return;
+        const dx = e.clientX - resizeStart.current.x;
+        const dy = e.clientY - resizeStart.current.y;
+
+        setSize({
+            width: Math.max(200, resizeStart.current.w + dx),
+            height: Math.max(150, resizeStart.current.h + dy)
+        });
+    };
+
+    const handleMouseUpResize = () => {
+        isResizing.current = false;
+        document.removeEventListener('mousemove', handleMouseMoveResize);
+        document.removeEventListener('mouseup', handleMouseUpResize);
+    };
+
+    if (token.type !== 'crc' && token.type !== 'flag') return null;
 
     return (
         <div
             ref={popoverRef}
-            className="fixed z-50 w-64 bg-[#252526] border border-[var(--vscode-widget-border)] shadow-xl rounded-md flex flex-col text-[var(--vscode-fg)]"
+            className="fixed z-50 bg-[#252526] border border-[var(--vscode-widget-border)] shadow-xl rounded-md flex flex-col text-[var(--vscode-fg)]"
             style={{
-                left: Math.min(position.x, window.innerWidth - 270), // Keep within screen
-                top
+                left: pos.x,
+                top: pos.y,
+                width: size.width,
+                height: size.height
             }}
         >
-            <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-border)] bg-[#2d2d2d]">
+            <div
+                className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-border)] bg-[#2d2d2d] cursor-move select-none"
+                onMouseDown={handleMouseDownHeader}
+            >
                 <span className="text-xs font-bold uppercase tracking-wide">{token.type === 'crc' ? 'CRC Config' : 'Custom Flag'}</span>
                 <div className="flex gap-2">
                     <X size={14} className="cursor-pointer hover:text-white" onClick={onClose} />
                 </div>
             </div>
 
-            <div className="p-3">
+            <div className="flex-1 overflow-auto p-3 flex flex-col">
                 {renderContent()}
 
-                <div className="flex items-center justify-between mt-3 pt-2 border-t border-[var(--vscode-border)]">
+                <div className="mt-auto pt-3 flex items-center justify-between border-t border-[var(--vscode-border)]">
                     <button
                         className="px-2 py-1 text-[11px] text-[#f48771] hover:bg-[#4b1818] rounded"
                         onClick={() => { onDelete(token.id); onClose(); }}
@@ -159,6 +248,14 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                         <Check size={12} /> Apply
                     </button>
                 </div>
+            </div>
+
+            {/* Resize Handle (Bottom-Right) */}
+            <div
+                className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize z-50 flex items-center justify-center opacity-50 hover:opacity-100"
+                onMouseDown={handleMouseDownResize}
+            >
+                <div className="w-2 h-2 border-r-2 border-b-2 border-[#666]" />
             </div>
         </div>
     );

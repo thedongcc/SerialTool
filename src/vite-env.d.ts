@@ -6,6 +6,7 @@ export interface SerialPortInfo {
     locationId?: string;
     vendorId?: string;
     productId?: string;
+    friendlyName?: string;
 }
 
 export interface SerialOpenOptions {

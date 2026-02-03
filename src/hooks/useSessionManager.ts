@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { SessionState, SessionConfig, LogEntry } from '../types/session';
 import { SerialPortInfo } from '../vite-env';
 import { applyTXCRC, validateRXCRC } from '../utils/crc';
+import { virtualPortService } from '../plugins/virtual-ports/VirtualPortService';
 
 const MAX_LOGS = 1000;
 
@@ -26,6 +27,7 @@ export const useSessionManager = () => {
     }, []);
 
     const addLog = useCallback((sessionId: string, type: LogEntry['type'], data: string | Uint8Array, crcStatus: LogEntry['crcStatus'] = 'none', topic?: string) => {
+        console.log(`[SM] addLog ${sessionId} [${type}] dataLen=${data.length}`);
         setSessions(prev => prev.map(s => {
             if (s.id === sessionId) {
                 const newLogs = [...s.logs, { type, data, timestamp: Date.now(), crcStatus, topic }];
@@ -46,7 +48,11 @@ export const useSessionManager = () => {
         if (!window.serialAPI) return;
         const result = await window.serialAPI.listPorts();
         if (result.success) {
-            setPorts(result.ports);
+            // Mix in virtual ports
+            const realPorts = result.ports;
+            const virtualPorts = virtualPortService.getSimulatedPorts();
+            // Dedup if conflict (shouldn't happen with CNCA/CNCB names)
+            setPorts([...realPorts, ...virtualPorts]);
         } else {
             console.error('Failed to list ports:', result.error);
         }
@@ -106,6 +112,26 @@ export const useSessionManager = () => {
         updateSession(sessionId, () => ({ isConnecting: true }));
 
         const { connection: options } = session.config;
+
+        // Check if Virtual Port
+        if (virtualPortService.isVirtualPort(options.path)) {
+            // Simulate Connection
+            const success = virtualPortService.open(options.path, options);
+            if (success) {
+                // Set default signals (DTR/RTS High is standard for terminal)
+                virtualPortService.setSignals(options.path, { rts: true, dtr: true });
+
+                setTimeout(() => {
+                    updateSession(sessionId, () => ({ isConnected: true, isConnecting: false }));
+                    addLog(sessionId, 'INFO', `Connected to Virtual Port ${options.path}`);
+                }, 500); // Fake delay
+            } else {
+                updateSession(sessionId, () => ({ isConnecting: false }));
+                addLog(sessionId, 'ERROR', `Failed to open virtual port ${options.path}`);
+            }
+            return;
+        }
+
         const result = await window.serialAPI.open(sessionId, options);
 
         if (result.success) {
@@ -122,7 +148,9 @@ export const useSessionManager = () => {
         if (!session || !session.isConnected) return;
 
         if (session.config.type === 'serial') {
-            if (window.serialAPI) {
+            if (virtualPortService.isVirtualPort(session.config.connection.path)) {
+                virtualPortService.close(session.config.connection.path);
+            } else if (window.serialAPI) {
                 await window.serialAPI.close(sessionId);
             }
         } else if (session.config.type === 'mqtt') {
@@ -153,6 +181,7 @@ export const useSessionManager = () => {
         if (!window.serialAPI) return;
 
         // Process data (CRC)
+        // Process data (CRC)
         let rawData: Uint8Array;
         if (typeof data === 'string') {
             rawData = new TextEncoder().encode(data);
@@ -163,6 +192,18 @@ export const useSessionManager = () => {
         }
 
         const finalData = applyTXCRC(rawData, session.config.txCRC);
+
+        // Check Virtual Port
+        if (virtualPortService.isVirtualPort(session.config.connection.path)) {
+            virtualPortService.write(session.config.connection.path, finalData);
+            // Also validate TX data with RX CRC config if enabled
+            const crcStatus = session.config.rxCRC?.enabled
+                ? validateRXCRC(finalData, session.config.rxCRC)
+                : 'none';
+            addLog(sessionId, 'TX', finalData, crcStatus);
+            return;
+        }
+
         const result = await window.serialAPI.write(sessionId, finalData);
 
         if (result.success) {
@@ -243,6 +284,15 @@ export const useSessionManager = () => {
                 autoReconnect: true,
                 connectTimeout: 30,
                 topics: [],
+                ...config
+            } as any;
+        } else if (type === 'graph') {
+            baseConfig = {
+                id: newId,
+                name: `Graph ${savedSessions.filter(s => s.type === 'graph').length + 1}`,
+                type: 'graph',
+                autoConnect: false,
+                graphData: { nodes: [], edges: [] },
                 ...config
             } as any;
         } else if (type === 'settings') {
@@ -404,7 +454,36 @@ export const useSessionManager = () => {
                 // Complex in this "all in one" hook.
             }
         });
-    }, [sessions.map(s => s.id).join(','), updateSession, addLog]);
+
+
+        // Handling Virtual Listeners dynamically
+        sessions.forEach(session => {
+            const key = `virtual-${session.id}`;
+            if (session.isConnected && session.config.type === 'serial' && virtualPortService.isVirtualPort(session.config.connection.path)) {
+                if (!cleanupRefs.current.has(key)) {
+                    const unsub = virtualPortService.onData(session.config.connection.path, (data) => {
+                        console.log(`[SM] onData ${session.config.connection.path} rx=${data.length}`);
+                        setSessions(prev => {
+                            const s = prev.find(x => x.id === session.id);
+                            if (!s) return prev;
+                            const isOk = validateRXCRC(data, s.config.rxCRC);
+                            const newLogs = [...s.logs, { type: 'RX', data, timestamp: Date.now(), crcStatus: s.config.rxCRC.enabled ? (isOk ? 'ok' : 'error') : 'none' } as LogEntry];
+                            if (newLogs.length > MAX_LOGS) newLogs.shift();
+                            return prev.map(x => x.id === session.id ? { ...x, logs: newLogs } : x);
+                        });
+                    });
+                    cleanupRefs.current.set(key, [unsub]);
+                }
+            } else {
+                // Not connected or not virtual
+                if (cleanupRefs.current.has(key)) {
+                    cleanupRefs.current.get(key)!.forEach(c => c());
+                    cleanupRefs.current.delete(key);
+                }
+            }
+        });
+
+    }, [sessions.map(s => `${s.id}-${s.isConnected}`).join(','), updateSession, addLog]);
     // This dependency array is a bit cheat-y but works for detecting addition of sessions.
     // ideally we have a separate component or hook per session. But global manager is okay for now.
 

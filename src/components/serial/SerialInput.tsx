@@ -147,8 +147,9 @@ export const SerialInput = ({
         if (!editor) return;
 
         const html = editor.getHTML();
+        const text = editor.getText();
         const tokensMap = extractTokens();
-        const { data } = MessagePipeline.process('', html, mode, tokensMap, lineEnding);
+        const { data } = MessagePipeline.process(text, html, mode, tokensMap, lineEnding);
 
         onSend(data, mode);
     };

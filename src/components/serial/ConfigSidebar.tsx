@@ -67,7 +67,10 @@ const SerialConfigPanel = ({ session, sessionManager }: { session: any, sessionM
                         <option value="" disabled>Select Port</option>
                         {ports.map(port => (
                             <option key={port.path} value={port.path}>
-                                {port.path} {port.manufacturer ? `- ${port.manufacturer}` : ''}
+                                {port.path} {port.friendlyName
+                                    ? port.friendlyName.replace(`(${port.path})`, '').trim()
+                                    : ''}
+                                {(!port.friendlyName && !port.manufacturer) ? '' : (port.manufacturer ? ` (${port.manufacturer})` : '')}
                             </option>
                         ))}
                     </select>

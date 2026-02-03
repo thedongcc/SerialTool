@@ -475,6 +475,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
 
             {/* Serial Input Area */}
             <SerialInput
+                key={session.id}
                 onSend={handleSend}
                 initialContent={uiState.inputContent || ''}
                 initialHTML={uiState.inputHTML || ''}

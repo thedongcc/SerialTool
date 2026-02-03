@@ -48,13 +48,15 @@ export const SessionListSidebar = ({ sessionManager, editorLayout }: SessionList
 
     const saveEdit = () => {
         if (editingId) {
+            console.log(`[Sidebar] Saving rename for ${editingId} to "${editName}"`);
             const session = sessionManager.savedSessions.find(s => s.id === editingId);
             if (session && editName.trim() !== '') {
-                const updatedConfig = { ...session, name: editName };
-                sessionManager.saveSession(updatedConfig);
-
-                if (sessionManager.activeSessionId === editingId) {
+                const isOpen = sessionManager.sessions.some(s => s.id === editingId);
+                if (isOpen) {
                     sessionManager.updateSessionConfig(editingId, { name: editName });
+                } else {
+                    const updatedConfig = { ...session, name: editName };
+                    sessionManager.saveSession(updatedConfig);
                 }
             }
             setEditingId(null);

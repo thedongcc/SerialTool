@@ -9,7 +9,7 @@ export interface LogEntry {
     topic?: string;
 }
 
-export type SessionType = 'serial' | 'mqtt' | 'tcp' | 'udp' | 'vnc' | 'rdp' | 'ssh' | 'file' | 'ftp' | 'sftp' | 'settings';
+export type SessionType = 'serial' | 'mqtt' | 'tcp' | 'udp' | 'vnc' | 'rdp' | 'ssh' | 'file' | 'ftp' | 'sftp' | 'settings' | 'graph';
 
 export interface BaseSessionConfig {
     id: string;
@@ -62,7 +62,16 @@ export interface MqttSessionConfig extends BaseSessionConfig {
     topics: string[];
 }
 
-export type SessionConfig = SerialSessionConfig | MqttSessionConfig | SettingsSessionConfig;
+export interface GraphSessionConfig extends BaseSessionConfig {
+    type: 'graph';
+    graphData?: {
+        nodes: any[];
+        edges: any[];
+        // visual metadata?
+    };
+}
+
+export type SessionConfig = SerialSessionConfig | MqttSessionConfig | SettingsSessionConfig | GraphSessionConfig;
 
 export interface SessionState {
     id: string; // Same as config.id
