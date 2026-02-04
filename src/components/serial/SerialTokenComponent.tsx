@@ -34,7 +34,8 @@ export const SerialTokenComponent: React.FC<NodeViewProps> = ({ node, getPos, se
     } else if (type === 'flag') {
         const hex = config.hex || '';
         const display = hex.length > 20 ? hex.substring(0, 20) + '...' : hex;
-        label = config.name ? `${config.name}: ${display}` : (hex ? `Flag: ${display}` : 'Flag');
+        // 使用英文冒号
+        label = config.name ? `${config.name}: ${display}` : (hex ? `Flag:${display}` : 'Flag');
     } else if (type === 'timestamp') {
         // 显示时间戳 Token
         const byteOrder = config.byteOrder || 'big';
@@ -62,8 +63,8 @@ export const SerialTokenComponent: React.FC<NodeViewProps> = ({ node, getPos, se
             >
                 <span className="opacity-50 mr-[1px]">/</span>
                 <span className={type === 'crc' ? 'font-medium' : ''}>
-                    {type === 'crc' ? (config.algorithm === 'modbus-crc16' ? 'CRC:Modbus' : config.algorithm === 'ccitt-crc16' ? 'CRC:CCITT' : `CRC:${config.algorithm}`) :
-                        type === 'timestamp' ? (config.format === 'milliseconds' ? 'Time:ms' : 'Time:s') :
+                    {type === 'crc' ? (config.algorithm === 'modbus-crc16' ? 'CRC16-Modbus' : config.algorithm === 'ccitt-crc16' ? 'CRC16-CCITT' : `CRC:${config.algorithm}`) :
+                        type === 'timestamp' ? (config.format === 'milliseconds' ? 'Time:Unix_ms' : 'Time:Unix_s') :
                             label}
                 </span>
             </span>
