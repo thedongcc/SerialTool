@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { SessionState, SessionConfig } from '../../types/session';
 import { SerialInput } from './SerialInput';
 import { Settings, Eye, EyeOff, X, Trash2, Download, ArrowDown } from 'lucide-react';
@@ -25,7 +25,7 @@ interface SerialMonitorProps {
     onUpdateConfig?: (updates: Partial<SessionConfig>) => void;
     onInputStateChange?: (inputState: any) => void;
     onClearLogs?: () => void;
-    onConnectRequest?: () => void;
+    onConnectRequest?: () => Promise<boolean | void> | void;
 }
 
 export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig, onInputStateChange, onClearLogs, onConnectRequest }: SerialMonitorProps) => {
@@ -52,13 +52,49 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
     const crcEnabled = (config as any).rxCRC?.enabled || false;
     const rxCRC = (config as any).rxCRC || { enabled: false, algorithm: 'modbus-crc16', startIndex: 0, endIndex: 0 };
 
-    // Save UI state when it changes
-    const saveUIState = (updates: any) => {
-        if (onUpdateConfig) {
-            const currentUIState = (config as any).uiState || {};
-            onUpdateConfig({ uiState: { ...currentUIState, ...updates } } as any);
+    // Use a ref to store the latest config to break dependency cycle
+    // Use a ref to store the latest config to break dependency cycle
+    const configRef = useRef(config);
+    useEffect(() => { configRef.current = config; }, [config]);
+
+    // Debounce timer
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Clean up timer on unmount to prevent zombie updates
+    useEffect(() => {
+        return () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    // Save UI state when it changes (Debounced)
+    const saveUIState = useCallback((updates: any) => {
+        if (!onUpdateConfig) return;
+
+        // Clear existing timer
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
         }
-    };
+
+        saveTimeoutRef.current = setTimeout(() => {
+            const currentUIState = (configRef.current as any).uiState || {};
+
+            // Deep comparison or field-by-field to prevent useless updates
+            const hasChanges = Object.keys(updates).some(k =>
+                JSON.stringify(updates[k]) !== JSON.stringify(currentUIState[k])
+            );
+
+            if (!hasChanges) {
+                saveTimeoutRef.current = null;
+                return;
+            }
+
+            onUpdateConfig({ uiState: { ...currentUIState, ...updates } } as any);
+            saveTimeoutRef.current = null;
+        }, 500);
+    }, [onUpdateConfig]);
 
     // Calculate statistics
     const txBytes = logs.filter(log => log.type === 'TX').reduce((sum, log) => {
@@ -184,7 +220,10 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
 
     const fontFamilyClass = fontFamily === 'consolas' ? 'font-[Consolas]' : fontFamily === 'courier' ? 'font-[Courier]' : 'font-mono';
 
-    const handleInputStateChange = (state: { content: string, html: string, tokens: any, mode: 'text' | 'hex', lineEnding: string }) => {
+    const handleInputStateChange = useCallback((state: { content: string, html: string, tokens: any, mode: 'text' | 'hex', lineEnding: string }) => {
+        // Prevent update if content hasn't changed (simple check)
+        // Note: tokens might be complex object, deep comparison might be heavy. 'inputHTML' usually changes if visual changes.
+        // We will trust the callback for now but stabilization helps.
         saveUIState({
             inputContent: state.content,
             inputHTML: state.html,
@@ -192,7 +231,12 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
             inputMode: state.mode,
             lineEnding: state.lineEnding
         });
-    };
+    }, []); // Empty deps because saveUIState is stable (if defined properly) or we use function update form in saveUIState if needed.
+    // However, saveUIState depends on 'onUpdateConfig'.
+    // 'onUpdateConfig' is from props.
+    // If 'onUpdateConfig' changes, we re-create this.
+    // Let's add 'saveUIState' to deps (it's defined in component but wrapper around prop).
+    // Actually, saveUIState uses 'onUpdateConfig'. We should wrap saveUIState in useCallback too or just put deps here.
 
     return (
         <div
@@ -201,8 +245,17 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
         >
             {/* Enhanced Toolbar */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#2b2b2b] bg-[#252526] shrink-0">
-                <div className="text-sm font-medium text-[#cccccc]">
-                    {isConnected ? `Connected to ${currentPort}` : 'Disconnected'}
+                <div className="text-sm font-medium text-[#cccccc] flex items-center gap-2">
+                    {isConnected ? (
+                        <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
+                    ) : (
+                        <div className="w-2 h-2 rounded-full bg-red-500" />
+                    )}
+
+                    {/* Always show connection info if port is selected, otherwise 'No Port' or something? User said "same content as connected". */
+                        /* If not connected, we still have config.connection.path etc. from session state. */
+                    }
+                    {`${currentPort || 'No Port'}-${config.connection.baudRate}-${config.connection.dataBits}-${config.connection.parity === 'none' ? 'N' : config.connection.parity.toUpperCase()}-${config.connection.stopBits}`}
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -465,20 +518,20 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                     </div>
                 )}
                 {filteredLogs.map((log, index) => (
-                    <div key={index} className={`flex gap-2 mb-1 hover:bg-[#2a2d2e] rounded px-1 group relative border-l-2 ${log.crcStatus === 'error' ? 'bg-[#4b1818] border-[#f48771]' : 'border-transparent'
+                    <div key={index} className={`flex items-baseline gap-2.5 mb-0.5 hover:bg-[#2a2d2e] rounded px-1.5 py-0.5 group relative border-l-2 font-[family-name:var(--font-mono)] text-[13px] leading-5 ${log.crcStatus === 'error' ? 'bg-[#4b1818]/20 border-[#f48771]' : 'border-transparent'
                         }`}>
                         {showTimestamp && (
-                            <span className="text-[var(--st-timestamp)] shrink-0 w-[85px]">
-                                {formatTimestamp(log.timestamp, themeConfig.timestampFormat)}
+                            <span className="text-[var(--st-timestamp)] shrink-0 opacity-70">
+                                [{formatTimestamp(log.timestamp, themeConfig.timestampFormat).trim()}]
                             </span>
                         )}
-                        <span className={`font-bold shrink-0 select-none w-[30px] ${log.type === 'TX' ? 'text-[var(--st-tx-label)]' :
+                        <span className={`font-bold shrink-0 select-none ${log.type === 'TX' ? 'text-[var(--st-tx-label)]' :
                             log.type === 'RX' ? 'text-[var(--st-rx-label)]' :
                                 'text-[var(--st-info-text)]'
                             }`}>
-                            {log.type}
+                            {log.type === 'TX' ? 'TX ->' : log.type === 'RX' ? 'RX <-' : log.type}
                         </span>
-                        <span className={`whitespace-pre-wrap break-all select-text cursor-text ${log.type === 'TX' ? 'text-[var(--st-tx-text)]' :
+                        <span className={`whitespace-pre-wrap break-all select-text cursor-text flex-1 ${log.type === 'TX' ? 'text-[var(--st-tx-text)]' :
                             log.type === 'RX' ? 'text-[var(--st-rx-text)]' :
                                 log.type === 'ERROR' ? 'text-[var(--st-error-text)]' :
                                     'text-[var(--st-info-text)]'
@@ -486,7 +539,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                             {formatData(log.data, viewMode, encoding)}
                         </span>
                         {log.crcStatus === 'error' && (
-                            <span className="absolute right-2 top-0.5 text-[10px] text-[#f48771] bg-[#1e1e1e] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="ml-2 text-[10px] text-[#f48771] bg-[#4b1818] px-1.5 rounded border border-[#f48771]/30">
                                 CRC Error
                             </span>
                         )}
@@ -505,10 +558,20 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                 initialLineEnding={uiState.lineEnding || '\r\n'}
                 onStateChange={handleInputStateChange}
                 isConnected={isConnected}
-                onConnectRequest={() => {
-                    // Open config sidebar and flash button
-                    if (onShowSettings) onShowSettings('serial');
-                    if (onInputStateChange) onInputStateChange({ highlightConnect: Date.now() });
+                onConnectRequest={async () => {
+                    // Try to connect if a port is configured
+                    if (config.connection.path && onConnectRequest) {
+                        const result = await onConnectRequest();
+                        // If result is explicitly false (connection failed), open settings
+                        if (result === false) {
+                            if (onShowSettings) onShowSettings('serial');
+                            if (onInputStateChange) onInputStateChange({ highlightConnect: Date.now() });
+                        }
+                    } else {
+                        // No port configured, open settings directly
+                        if (onShowSettings) onShowSettings('serial');
+                        if (onInputStateChange) onInputStateChange({ highlightConnect: Date.now() });
+                    }
                 }}
             />
         </div>

@@ -42,30 +42,30 @@ export const SerialTokenComponent: React.FC<NodeViewProps> = ({ node, getPos, se
         label = format === 'milliseconds' ? `TS: ms (${byteOrder === 'big' ? 'BE' : 'LE'})` : `TS: s (${byteOrder === 'big' ? 'BE' : 'LE'})`;
     }
 
-    const colorClass = type === 'crc'
-        ? 'text-[var(--st-token-crc)] border-l-[var(--st-token-crc)] hover:border-l-[var(--st-token-crc)] ring-[var(--st-token-crc)]'
-        : type === 'timestamp'
-            ? 'text-[#4fc1ff] border-l-[#4fc1ff] hover:border-l-[#4fc1ff] ring-[#4fc1ff]'
-            : 'text-[var(--st-token-flag)] border-l-[var(--st-token-flag)] hover:border-l-[var(--st-token-flag)] ring-[var(--st-token-flag)]';
-
     return (
-        <NodeViewWrapper as="span" className="inline-block align-middle select-all mr-1">
+        <NodeViewWrapper as="span" className="inline select-none mx-[1px] align-baseline">
             <span
-                data-drag-handle
                 onClick={handleClick}
                 className={`
-                    inline-flex items-center px-1.5 h-[22px] 
-                    bg-[#252526] ${colorClass}
-                    text-[13px] font-mono leading-none 
-                    border border-[#3c3c3c] border-l-[3px] hover:border-[#505050]
-                    cursor-pointer whitespace-nowrap overflow-hidden
-                    transition-all rounded-[3px]
-                    ${selected ? 'ring-1 border-transparent' : ''}
-                    shadow-sm
+                    inline-block
+                    rounded-[2px] text-[13px] font-[family-name:var(--font-mono)] font-normal leading-none
+                    cursor-pointer transition-colors
+                    ${selected ? 'ring-1 ring-[var(--vscode-focusBorder)]' : ''}
+                    ${type === 'crc'
+                        ? 'text-[#4ec9b0]'
+                        : type === 'timestamp'
+                            ? 'text-[#4fc1ff]'
+                            : 'text-[#f48771]'
+                    }
                 `}
-                title="Click to configure, Drag to move"
+                title="Click to configure"
             >
-                {label}
+                <span className="opacity-50 mr-[1px]">/</span>
+                <span className={type === 'crc' ? 'font-medium' : ''}>
+                    {type === 'crc' ? (config.algorithm === 'modbus-crc16' ? 'CRC:Modbus' : config.algorithm === 'ccitt-crc16' ? 'CRC:CCITT' : `CRC:${config.algorithm}`) :
+                        type === 'timestamp' ? (config.format === 'milliseconds' ? 'Time:ms' : 'Time:s') :
+                            label}
+                </span>
             </span>
         </NodeViewWrapper>
     );

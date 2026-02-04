@@ -133,13 +133,18 @@ export const useSessionManager = () => {
         }
 
         const result = await window.serialAPI.open(sessionId, options);
+        console.log('[connectSession] API Result for', options.path, ':', result);
 
         if (result.success) {
             updateSession(sessionId, () => ({ isConnected: true, isConnecting: false }));
-            addLog(sessionId, 'INFO', `Connected to ${options.path}`);
+            const { baudRate, dataBits, parity, stopBits } = options;
+            addLog(sessionId, 'INFO', `Connected to ${options.path} (${baudRate}-${dataBits}-${parity.toUpperCase()}-${stopBits})`);
+            return true;
         } else {
             updateSession(sessionId, () => ({ isConnecting: false }));
             addLog(sessionId, 'ERROR', `Failed to connect: ${result.error}`);
+            console.warn('[connectSession] Failed:', result);
+            return false;
         }
     }, [sessions, updateSession, addLog]);
 

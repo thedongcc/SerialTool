@@ -99,17 +99,17 @@ export const CommandItemComponent = ({ item, onEdit, onSend, onContextMenu, disa
             {/* Send Button */}
             <div className={`transition-opacity relative z-20 ${disabled ? 'opacity-0 group-hover:opacity-40' : 'opacity-0 group-hover:opacity-100'}`}>
                 <button
-                    className={`p-1 rounded transition-colors ${disabled ? 'cursor-not-allowed text-[#666]' : 'hover:bg-[#007acc] text-[#cccccc] hover:text-white'}`}
-                    title={disabled ? "No active session" : "Send Command"}
+                    className={`p-1 rounded transition-colors ${disabled
+                        ? 'text-[#666] hover:bg-[#333] hover:text-[#999]'
+                        : 'hover:bg-[#007acc] text-[#cccccc] hover:text-white'}`}
+                    title={disabled ? "Click to Connect & Send" : "Send Command"}
                     onClick={(e) => {
                         e.stopPropagation();
-                        if (!disabled) {
-                            console.log('Send button clicked via UI', item.name);
-                            onSend(item);
-                        }
+                        // Always allow click, parent handles auto-connect logic
+                        console.log('Send button clicked via UI', item.name);
+                        onSend(item);
                     }}
                     onDoubleClick={(e) => e.stopPropagation()}
-                    disabled={disabled}
                 >
                     <Play size={12} fill="currentColor" />
                 </button>

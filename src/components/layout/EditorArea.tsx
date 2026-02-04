@@ -294,7 +294,7 @@ const GroupPanel = ({ node, isActive, sessions, sessionManager, layoutActions, o
                             onClearLogs={() => sessionManager.clearLogs(session.id)}
                             onConnectRequest={() => {
                                 sessionManager.setActiveSessionId(session.id);
-                                sessionManager.connectSession(session.id);
+                                return sessionManager.connectSession(session.id);
                             }}
                         />;
                     })()

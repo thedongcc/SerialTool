@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Send, Plus, Upload, Timer, Flag } from 'lucide-react';
 import { Token, CRCConfig, FlagConfig } from '../../types/token';
 import { TokenConfigPopover } from './TokenConfigPopover';
@@ -8,6 +8,7 @@ import { MessagePipeline } from '../../services/MessagePipeline';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { SerialToken } from './SerialTokenExtension';
+import { SuggestionExtension, getSuggestionOptions } from './SuggestionExtension';
 import { SERIAL_TOKEN_CLICK_EVENT } from './SerialTokenComponent';
 
 interface SerialInputProps {
@@ -39,23 +40,44 @@ export const SerialInput = ({
     const [timerEnabled, setTimerEnabled] = useState(false);
     const [timerInterval, setTimerInterval] = useState(1000);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const isReadyRef = useRef(false);
+
+    // Memoize extensions to prevent editor re-creation on every render
+    const extensions = useMemo(() => [
+        StarterKit,
+        SerialToken,
+        SuggestionExtension.configure({
+            suggestion: getSuggestionOptions(),
+        }),
+    ], []);
+
+    // Memoize editorProps
+    const editorProps = useMemo(() => ({
+        attributes: {
+            class: 'outline-none text-[var(--st-input-text)] text-[13px] font-[family-name:var(--font-mono)] whitespace-pre-wrap break-all flex-1 min-h-[40px] overflow-y-auto custom-scrollbar p-2 leading-[20px] [&_p]:m-0 tracking-[0px]',
+            spellcheck: 'false',
+            style: 'font-variant-ligatures: none;'
+        },
+    }), []);
 
     // TipTap Editor
-    console.log('SerialInput: Initializing editor with content:', { initialHTML, initialContent });
+    // console.log('SerialInput: Initializing editor with content:', { initialHTML, initialContent });
     const editor = useEditor({
-        extensions: [
-            StarterKit,
-            SerialToken,
-        ],
+        extensions,
         content: initialHTML || initialContent,
-        editorProps: {
-            attributes: {
-                class: 'outline-none text-[var(--st-input-text)] text-[13px] font-mono whitespace-pre-wrap break-all flex-1 min-h-[40px] overflow-y-auto custom-scrollbar p-2 leading-[22px] [&_p]:m-0 [&_span]:align-middle',
-                spellcheck: 'false',
-            },
+        editorProps,
+        onCreate: () => {
+            // Mark ready after initial render cycle to skip initial update
+            setTimeout(() => { isReadyRef.current = true; }, 0);
         },
-        onUpdate: ({ editor }) => {
+        onUpdate: ({ editor, transaction }) => {
             // Sync state to parent
+            // Avoid syncing if no document change (e.g. selection only or initial parse)
+            // Also ensure we are "ready" to avoid initial load trigger
+            if ((!transaction.docChanged && !transaction.scrolledIntoView) || !isReadyRef.current) {
+                return;
+            }
+
             if (onStateChange) {
                 const json = editor.getJSON();
                 const tokensMap: Record<string, Token> = {};
@@ -68,16 +90,6 @@ export const SerialInput = ({
                 };
                 traverse(json);
 
-                // We can't easily access latest 'mode' state here inside closure if it's stale.
-                // But we can just pass the content updates.
-                // Or we rely on the parent merging?
-                // onStateChange signature: (state: { ... })
-                // Let's pass current values. 'mode' might be stale, but 'content' is fresh.
-                // Actually, if we pass stale mode, we revert mode change?
-                // Let's try to assume onStateChange merges or handles partials?
-                // The interface seems to require full object. 
-                // Let's assume mode doesn't change often during typing.
-
                 onStateChange({
                     content: editor.getText(),
                     html: editor.getHTML(),
@@ -85,12 +97,9 @@ export const SerialInput = ({
                     mode,
                     lineEnding
                 });
-                // Debug: Log the full JSON to see content structure
-                console.log('Editor onUpdate JSON:', JSON.stringify(editor.getJSON(), null, 2));
-                console.log('Editor onUpdate HTML:', editor.getHTML());
             }
         },
-    });
+    }, [extensions, editorProps]); // Add dependency array to useEditor just in case (TipTap supports it)
 
     // Handle Token Clicks
     useEffect(() => {
@@ -218,7 +227,7 @@ export const SerialInput = ({
                 <div className="flex-1" />
                 <div className="flex items-center gap-2">
                     <div
-                        className={`w-4 h-4 border border-[#cccccc] rounded-sm cursor-pointer flex items-center justify-center ${timerEnabled ? 'bg-[#007acc] border-[#007acc]' : ''}`}
+                        className={`w - 4 h - 4 border border - [#cccccc] rounded - sm cursor - pointer flex items - center justify - center ${timerEnabled ? 'bg-[#007acc] border-[#007acc]' : ''} `}
                         onClick={() => setTimerEnabled(!timerEnabled)}
                     >
                         {timerEnabled && <div className="w-2 h-2 bg-white rounded-[1px]" />}

@@ -17,6 +17,7 @@
     "@tiptap/extension-text-style": "^3.18.0",
     "@tiptap/react": "^3.18.0",
     "@tiptap/starter-kit": "^3.18.0",
+    "@tiptap/suggestion": "^3.19.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",
     "mqtt": "^5.14.1",
@@ -25,7 +26,8 @@
     "react-resizable-panels": "^4.5.7",
     "serialport": "^13.0.0",
     "tailwind-merge": "^3.4.0",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "tippy.js": "^6.3.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",

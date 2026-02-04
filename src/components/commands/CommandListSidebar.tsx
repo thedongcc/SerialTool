@@ -84,7 +84,7 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
         undo, redo, canUndo, canRedo
     } = useCommandManager();
 
-    const { activeSessionId, sessions, writeToSession, publishMqtt } = useSession();
+    const { activeSessionId, sessions, writeToSession, publishMqtt, connectSession } = useSession();
     const [showMenu, setShowMenu] = useState(false);
     const [editingItem, setEditingItem] = useState<CommandEntity | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, item: CommandEntity | null } | null>(null);
@@ -370,12 +370,34 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
             return;
         }
         const session = sessions.find(s => s.id === activeSessionId);
-        if (!session || !session.isConnected) {
-            console.warn('Send failed: Session not connected', { session });
-            if (onNavigate) {
-                onNavigate('serial'); // Redirect to config
+        if (!session.isConnected) {
+            console.log('Auto-Connect: Session is disconnected. Attempting to connect...', session.id);
+            if (activeSessionId) {
+                console.log('Auto-Connect: Calling connectSession for', activeSessionId);
+                try {
+                    // Try to connect
+                    const success = await connectSession(activeSessionId);
+                    console.log('Auto-Connect: connectSession result:', success);
+
+                    if (success === true) {
+                        console.log('Auto-Connect: Connection successful. Stying on page.');
+                        // Success!
+                        return;
+                    } else {
+                        console.warn('Auto-Connect: Connection failed (returned false). Navigating to config.');
+                        if (onNavigate) onNavigate('serial');
+                        return;
+                    }
+                } catch (e) {
+                    console.error('Auto-Connect: Exception during connection attempt:', e);
+                    if (onNavigate) onNavigate('serial');
+                    return;
+                }
+            } else {
+                console.warn('Auto-Connect: No active session ID. Navigating to config.');
+                if (onNavigate) onNavigate('serial');
+                return;
             }
-            return;
         }
 
         try {

@@ -62,6 +62,8 @@ div[data-direction="vertical"]:hover {
   --vscode-menu-bg: #252526;
   --vscode-menu-fg: #cccccc;
   --vscode-menu-border: #454545;
+
+  --font-mono: 'JetBrainsMono Nerd Font', 'FiraCode Nerd Font', 'Segou UI Mono', 'Consolas', 'Courier New', monospace;
 }
 
 .theme-light {
@@ -104,7 +106,7 @@ div[data-direction="vertical"]:hover {
 
   --vscode-activitybar-inactive-fg: #858585;
   /* Keep dark style due to dark bar */
-  
+
   /* Menu - Light */
   --vscode-menu-bg: #ffffff;
   --vscode-menu-fg: #333333;
@@ -154,7 +156,7 @@ div[data-direction="vertical"]:hover {
 
   --vscode-activitybar-inactive-fg: #ffffff;
   /* HC uses white usually with opacity or border */
-  
+
   /* Menu - HC */
   --vscode-menu-bg: #000000;
   --vscode-menu-fg: #ffffff;
@@ -201,17 +203,17 @@ div[data-direction="vertical"]:hover {
   --vscode-textLink-foreground: #61afef;
 
   --vscode-activitybar-inactive-fg: #5c6370;
-  
+
   /* Menu - One Dark */
   --vscode-menu-bg: #282c34;
   --vscode-menu-fg: #abb2bf;
-  --vscode-menu-border: #181a1f; 
+  --vscode-menu-border: #181a1f;
 }
 
 body {
   background-color: var(--vscode-bg);
   color: var(--vscode-fg);
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'JetBrainsMono Nerd Font', 'FiraCode Nerd Font', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   overflow: hidden;
   /* Prevent body scroll, handle in components */
 }

@@ -23,8 +23,6 @@ export const SerialToken = Node.create<SerialTokenOptions>({
 
     atom: true,
 
-    draggable: true,
-
     addAttributes() {
         return {
             id: {
