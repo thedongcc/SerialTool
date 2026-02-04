@@ -8,7 +8,6 @@ import { MessagePipeline } from '../../services/MessagePipeline';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { SerialToken } from './SerialTokenExtension';
-import { HexToken } from './HexTokenExtension';
 import { SERIAL_TOKEN_CLICK_EVENT } from './SerialTokenComponent';
 
 interface SerialInputProps {
@@ -47,7 +46,6 @@ export const SerialInput = ({
         extensions: [
             StarterKit,
             SerialToken,
-            HexToken,
         ],
         content: initialHTML || initialContent,
         editorProps: {
@@ -62,7 +60,7 @@ export const SerialInput = ({
                 const json = editor.getJSON();
                 const tokensMap: Record<string, Token> = {};
                 const traverse = (node: any) => {
-                    if (node.type === 'serialToken' || node.type === 'hexToken') {
+                    if (node.type === 'serialToken') {
                         const { id, type, config } = node.attrs;
                         tokensMap[id] = { id, type, config };
                     }
@@ -105,7 +103,7 @@ export const SerialInput = ({
         return () => window.removeEventListener(SERIAL_TOKEN_CLICK_EVENT, handleTokenClick);
     }, []);
 
-    const insertToken = (type: 'crc' | 'flag') => {
+    const insertToken = (type: 'crc' | 'flag' | 'timestamp') => {
         if (!editor) return;
         let config: any = {};
         if (type === 'crc') {
@@ -116,12 +114,9 @@ export const SerialInput = ({
             } as CRCConfig;
         } else if (type === 'flag') {
             config = { hex: 'AA', name: '' } as FlagConfig;
-        } else if (type === 'hex') {
-            // For hex, we use the custom command if available or generic insert
-            config = { byteWidth: 1 };
-            // @ts-ignore
-            editor.chain().focus().toggleHexToken({ config }).run();
-            return; // handled
+        } else if (type === 'timestamp') {
+            // 时间戳 Token
+            config = { format: 'seconds', byteOrder: 'big' };
         }
         editor.chain().focus().insertSerialToken({ type, config }).run();
     };
@@ -130,9 +125,7 @@ export const SerialInput = ({
         if (!editor || !popover) return;
 
         // Determine the node type based on the popover's token type
-        const nodeType = popover.type === 'hex' ? 'hexToken' : 'serialToken';
-        console.log('updateTokenConfig:', { id, newConfig, nodeType, pos: popover.pos, popoverType: popover.type });
-        editor.chain().focus().setNodeSelection(popover.pos).updateAttributes(nodeType, { config: newConfig }).run();
+        editor.chain().focus().setNodeSelection(popover.pos).updateAttributes('serialToken', { config: newConfig }).run();
     };
 
     const deleteToken = (id: string) => {
@@ -146,7 +139,7 @@ export const SerialInput = ({
         const json = editor.getJSON();
         const tokensMap: Record<string, Token> = {};
         const traverse = (node: any) => {
-            if (node.type === 'serialToken' || node.type === 'hexToken') {
+            if (node.type === 'serialToken') {
                 const { id, type, config } = node.attrs;
                 tokensMap[id] = { id, type, config };
             }
@@ -212,11 +205,10 @@ export const SerialInput = ({
                     <Flag size={14} className="text-[#4ec9b0]" />
                     <span>Add Flag</span>
                 </button>
-                <div className="w-[1px] h-4 bg-[#3c3c3c] mx-1" />
-                <button className="flex items-center gap-1 px-2 py-0.5 bg-[#3c3c3c] hover:bg-[#4c4c4c] text-[12px] text-[#cccccc] rounded-sm transition-colors"
-                    onClick={() => insertToken('hex')}>
-                    <div className="flex items-center justify-center w-[14px] h-[14px] border border-[#4ec9b0] text-[#4ec9b0] text-[9px] font-mono rounded-[2px] leading-none">H</div>
-                    <span>Wrap Hex</span>
+                <button className="flex items-center gap-1 px-2 py-0.5 hover:bg-[#3c3c3c] text-[12px] text-[#cccccc] rounded-sm transition-colors" title="Insert Unix Timestamp"
+                    onClick={() => insertToken('timestamp')}>
+                    <div className="flex items-center justify-center w-[14px] h-[14px] border border-[#4fc1ff] text-[#4fc1ff] text-[9px] font-mono rounded-[2px] leading-none">T</div>
+                    <span>Time</span>
                 </button>
                 <div className="w-[1px] h-4 bg-[#3c3c3c] mx-1" />
                 <button className="flex items-center gap-1 px-2 py-0.5 hover:bg-[#3c3c3c] text-[12px] text-[#cccccc] rounded-sm transition-colors opacity-50 cursor-not-allowed" title="Load File">

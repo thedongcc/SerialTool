@@ -22,27 +22,7 @@ export const parseDOM = (root: HTMLElement): Segment[] => {
             const el = node as HTMLElement;
             if (el.hasAttribute('data-token-id')) {
                 const id = el.getAttribute('data-token-id')!;
-                const type = el.getAttribute('data-token-type');
-
-                if (type === 'hex') {
-                    // Recursive parsing for container token
-                    // Try to find content wrapper (Editor DOM), fallback to element itself (Serialized HTML)
-                    const contentWrapper = el.querySelector('[data-content-wrapper]');
-                    console.log('Parser: Hex Token Found', { id, hasWrapper: !!contentWrapper, html: el.innerHTML });
-
-                    const targetEl = (contentWrapper || el) as HTMLElement;
-                    const children = parseDOM(targetEl);
-                    console.log('Parser: Hex Token Children', children);
-
-                    segments.push({
-                        id,
-                        type: 'token',
-                        content: { id, type: 'hex' } as any,
-                        children // Attach children
-                    });
-                } else {
-                    segments.push({ id, type: 'token', content: { id } as any });
-                }
+                segments.push({ id, type: 'token', content: { id } as any });
             } else {
                 // Traverse children
                 el.childNodes.forEach(traverse);
@@ -134,35 +114,40 @@ export const compileSegments = (
                 const bytes = parseHex(config.hex || '');
                 parts.push(bytes);
                 currentTotalLength += bytes.length;
-            } else if (token.type === 'hex' && segment.children) {
-                // Hex Container
-                // 1. Recursive Compilation
-                // Note: Inner tokens are looked up in the SAME global tokens map (flattened by TipTap)
-                const innerBytes = compileSegments(segment.children, mode, tokens);
-                console.log('Compiler: Hex Token Inner Bytes', { tokenId, bytes: innerBytes, width: token.config.byteWidth });
+            } else if (token.type === 'timestamp') {
+                // 时间戳 Token - 发送时生成当前 Unix 时间戳
+                const tsConfig = token.config as any;
+                const format = tsConfig.format || 'seconds';
+                const byteOrder = tsConfig.byteOrder || 'big';
 
-                // 2. Resize
-                const config = token.config as any; // Cast to HexConfig
-                const targetWidth = config.byteWidth || 1;
+                let timestamp: bigint;
+                let byteSize: number;
 
-                // Resize Logic:
-                // Pad Left with 0s if smaller.
-                // Keep LSB (Truncate Left) if larger. 
-                // E.g. [0x19, 0xBB] -> Width 1 -> [0xBB]
-                // [0x05] -> Width 3 -> [0x00, 0x00, 0x05]
-                const finalBytes = new Uint8Array(targetWidth);
-
-                if (innerBytes.length >= targetWidth) {
-                    // Take last N bytes
-                    finalBytes.set(innerBytes.slice(innerBytes.length - targetWidth));
+                if (format === 'milliseconds') {
+                    timestamp = BigInt(Date.now());
+                    byteSize = 8;
                 } else {
-                    // Pad left (default 0 init) -> set at offset
-                    // [0, 0, 0] <-- [0x05] (len 1). Offset = 3-1 = 2.
-                    finalBytes.set(innerBytes, targetWidth - innerBytes.length);
+                    timestamp = BigInt(Math.floor(Date.now() / 1000));
+                    byteSize = 4;
                 }
 
-                parts.push(finalBytes);
-                currentTotalLength += finalBytes.length;
+                const bytes = new Uint8Array(byteSize);
+
+                if (byteOrder === 'big') {
+                    // Big Endian
+                    for (let i = byteSize - 1; i >= 0; i--) {
+                        bytes[byteSize - 1 - i] = Number((timestamp >> BigInt(i * 8)) & BigInt(0xFF));
+                    }
+                } else {
+                    // Little Endian
+                    for (let i = 0; i < byteSize; i++) {
+                        bytes[i] = Number((timestamp >> BigInt(i * 8)) & BigInt(0xFF));
+                    }
+                }
+
+                console.log('Compiler: Timestamp Token', { format, byteOrder, timestamp: timestamp.toString(), bytes });
+                parts.push(bytes);
+                currentTotalLength += bytes.length;
             }
         }
     }

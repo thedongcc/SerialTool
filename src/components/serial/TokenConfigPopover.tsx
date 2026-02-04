@@ -139,6 +139,39 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                 </div>
             );
         }
+
+        if (token.type === 'timestamp') {
+            const tsConfig = config as any;
+            return (
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[11px] text-[#969696]">格式</label>
+                        <select
+                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
+                            value={tsConfig.format || 'seconds'}
+                            onChange={e => setConfig({ ...tsConfig, format: e.target.value })}
+                            onKeyDown={handleKeyDown}
+                        >
+                            <option value="seconds">秒 (4 字节)</option>
+                            <option value="milliseconds">毫秒 (8 字节)</option>
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[11px] text-[#969696]">字节序</label>
+                        <select
+                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
+                            value={tsConfig.byteOrder || 'big'}
+                            onChange={e => setConfig({ ...tsConfig, byteOrder: e.target.value })}
+                            onKeyDown={handleKeyDown}
+                        >
+                            <option value="big">Big Endian (大端)</option>
+                            <option value="little">Little Endian (小端)</option>
+                        </select>
+                    </div>
+                </div>
+            );
+        }
+
         return null;
     };
 
@@ -230,7 +263,7 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
         document.removeEventListener('mouseup', handleMouseUpResize);
     };
 
-    if (token.type !== 'crc' && token.type !== 'flag' && token.type !== 'hex') return null;
+    if (token.type !== 'crc' && token.type !== 'flag' && token.type !== 'timestamp') return null;
 
     return (
         <div
@@ -247,7 +280,7 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                 className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-border)] bg-[#2d2d2d] cursor-move select-none"
                 onMouseDown={handleMouseDownHeader}
             >
-                <span className="text-xs font-bold uppercase tracking-wide">{token.type === 'crc' ? 'CRC Config' : 'Custom Flag'}</span>
+                <span className="text-xs font-bold uppercase tracking-wide">{token.type === 'crc' ? 'CRC Config' : token.type === 'timestamp' ? 'Timestamp Config' : 'Custom Flag'}</span>
                 <div className="flex gap-2">
                     <X size={14} className="cursor-pointer hover:text-white" onClick={onClose} />
                 </div>

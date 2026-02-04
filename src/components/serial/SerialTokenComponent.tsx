@@ -23,47 +23,6 @@ export const SerialTokenComponent: React.FC<NodeViewProps> = ({ node, getPos, se
         window.dispatchEvent(event);
     };
 
-    if (type === 'hex') {
-        const byteWidth = config.byteWidth || 1;
-        // CRITICAL: NodeViewContent must not be nested inside contentEditable={false} elements
-        // Solution: Use a simple structure where NodeViewContent is the primary child
-        return (
-            <NodeViewWrapper
-                as="span"
-                className="inline-flex items-center align-middle mx-0.5"
-                style={{
-                    border: '1px solid #4c4c4c',
-                    borderRadius: '3px',
-                    backgroundColor: '#2d2d2d',
-                    boxShadow: selected ? '0 0 0 1px var(--vscode-focusBorder)' : 'none'
-                }}
-            >
-                {/* Label - Before content, using ::before pseudo or separate span */}
-                <span
-                    contentEditable={false}
-                    suppressContentEditableWarning
-                    onClick={handleClick}
-                    className="shrink-0 bg-[#3c3c3c] text-[#9cdcfe] text-[10px] font-mono px-1 py-0.5 cursor-pointer hover:bg-[#505050] border-r border-[#4c4c4c] select-none"
-                    style={{ userSelect: 'none', pointerEvents: 'auto' }}
-                    title="Click to configure Byte Width"
-                >
-                    {byteWidth}B
-                </span>
-
-                {/* Content Area - MUST be direct child with no contentEditable={false} wrapper */}
-                <NodeViewContent
-                    as="span"
-                    className="px-1 min-w-[40px] font-mono text-[13px] outline-none"
-                    style={{
-                        color: 'var(--st-input-text, #d4d4d4)',
-                        minHeight: '1.2em',
-                        display: 'inline-block'
-                    }}
-                />
-            </NodeViewWrapper>
-        );
-    }
-
     let label = 'Unknown';
     if (type === 'crc') {
         label = 'CRC';
@@ -76,11 +35,18 @@ export const SerialTokenComponent: React.FC<NodeViewProps> = ({ node, getPos, se
         const hex = config.hex || '';
         const display = hex.length > 20 ? hex.substring(0, 20) + '...' : hex;
         label = config.name ? `${config.name}: ${display}` : (hex ? `Flag: ${display}` : 'Flag');
+    } else if (type === 'timestamp') {
+        // 显示时间戳 Token
+        const byteOrder = config.byteOrder || 'big';
+        const format = config.format || 'seconds'; // seconds or milliseconds
+        label = format === 'milliseconds' ? `TS: ms (${byteOrder === 'big' ? 'BE' : 'LE'})` : `TS: s (${byteOrder === 'big' ? 'BE' : 'LE'})`;
     }
 
     const colorClass = type === 'crc'
         ? 'text-[var(--st-token-crc)] border-l-[var(--st-token-crc)] hover:border-l-[var(--st-token-crc)] ring-[var(--st-token-crc)]'
-        : 'text-[var(--st-token-flag)] border-l-[var(--st-token-flag)] hover:border-l-[var(--st-token-flag)] ring-[var(--st-token-flag)]';
+        : type === 'timestamp'
+            ? 'text-[#4fc1ff] border-l-[#4fc1ff] hover:border-l-[#4fc1ff] ring-[#4fc1ff]'
+            : 'text-[var(--st-token-flag)] border-l-[var(--st-token-flag)] hover:border-l-[var(--st-token-flag)] ring-[var(--st-token-flag)]';
 
     return (
         <NodeViewWrapper as="span" className="inline-block align-middle select-all mr-1">

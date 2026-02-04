@@ -60,23 +60,8 @@ export const SerialToken = Node.create<SerialTokenOptions>({
 
     parseHTML() {
         return [
-            {
-                tag: 'span[data-token-type]',
-                getAttrs: (node: HTMLElement) => {
-                    const type = node.getAttribute('data-token-type');
-                    // Exclude hex tokens - they should be handled by HexToken extension
-                    if (type === 'hex') return false;
-                    return null; // Accept other types
-                }
-            },
-            {
-                tag: 'span[data-token-id]',
-                getAttrs: (node: HTMLElement) => {
-                    const type = node.getAttribute('data-token-type');
-                    if (type === 'hex') return false;
-                    return null;
-                }
-            },
+            { tag: 'span[data-token-type]' },
+            { tag: 'span[data-token-id]' },
         ];
     },
 
