@@ -96,8 +96,15 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
     // Global Key Bindings
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            const isInput = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName || '');
-            if (isInput) return;
+            // Check if we're in an input/textarea or contenteditable element (TipTap editor)
+            const activeEl = document.activeElement;
+            const isInput = ['INPUT', 'TEXTAREA'].includes(activeEl?.tagName || '');
+            const isContentEditable = activeEl?.getAttribute('contenteditable') === 'true';
+
+            // Also check if a modal dialog is open (has z-50 class)
+            const hasModalOpen = document.querySelector('.fixed.z-50');
+
+            if (isInput || isContentEditable || hasModalOpen) return;
 
             // Undo / Redo
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
