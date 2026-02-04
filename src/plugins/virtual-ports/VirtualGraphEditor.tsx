@@ -4,7 +4,8 @@ import { restrictToWindowEdges } from '@dnd-kit/modifiers';
 import { virtualPortService, GraphNode as IGraphNode, GraphEdge as IGraphEdge } from './VirtualPortService';
 import { GraphNode } from './graph/GraphNode';
 import { GraphCanvas } from './graph/GraphCanvas';
-import { Plus, Trash2, Layout, ZoomIn, ZoomOut } from 'lucide-react';
+import { GraphLayout } from './graph/GraphStyles';
+import { Plus, Trash2, Eraser, Layout, ZoomIn, ZoomOut, Link, Network } from 'lucide-react';
 
 interface VirtualGraphEditorProps {
     sessionId?: string;
@@ -24,6 +25,8 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
     // Temp edge for visual rendering
     const [tempEdge, setTempEdge] = useState<{ sourceX: number, sourceY: number, targetX: number, targetY: number } | null>(null);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+    const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+    const [activeDrag, setActiveDrag] = useState<{ id: string, delta: { x: number, y: number } } | null>(null);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -42,6 +45,23 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
         return () => unsub();
     }, [sessionId]);
 
+    // Zoom Wheel Logic (Non-passive)
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const handleWheel = (e: WheelEvent) => {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                const zoomDelta = e.deltaY * -0.001;
+                setScale(s => Math.min(Math.max(0.1, s + zoomDelta), 5));
+            }
+        };
+
+        container.addEventListener('wheel', handleWheel, { passive: false });
+        return () => container.removeEventListener('wheel', handleWheel);
+    }, []);
+
     // Handle Delete Key
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -54,11 +74,28 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
                     virtualPortService.updateGraph(newNodes, newEdges);
                     setSelectedNodeId(null);
                 }
+                if (selectedEdgeId) {
+                    const newEdges = edges.filter(e => e.id !== selectedEdgeId);
+                    setEdges(newEdges);
+                    virtualPortService.updateGraph(nodes, newEdges);
+                    setSelectedEdgeId(null);
+                }
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedNodeId, nodes, edges]);
+    }, [selectedNodeId, selectedEdgeId, nodes, edges]);
+
+    // Drag State for smooth lines
+
+    const handleDragStart = (event: any) => {
+        setActiveDrag({ id: event.active.id, delta: { x: 0, y: 0 } });
+    };
+
+    const handleDragMove = (event: any) => {
+        const { active, delta } = event;
+        setActiveDrag({ id: active.id, delta: { x: delta.x / scale, y: delta.y / scale } });
+    };
 
     const handleDragEnd = (event: DragEndEvent) => {
         // ...
@@ -71,7 +108,10 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
                     x={node.position.x}
                     y={node.position.y}
                     isSelected={selectedNodeId === node.id}
-                    onSelect={(id) => setSelectedNodeId(id)}
+                    onSelect={(id) => {
+                        setSelectedNodeId(id);
+                        setSelectedEdgeId(null);
+                    }}
                     onHandleMouseDown={handleHandleMouseDown}
                 />
             ))
@@ -94,19 +134,28 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
 
         setNodes(newNodes);
         virtualPortService.updateGraph(newNodes, edges);
+        setActiveDrag(null);
     };
 
-    // --- Wire Connection Logic ---
+    const addNode = (type: 'physical' | 'virtual' | 'pair' | 'bus') => {
+        const id = `node-${Date.now()}`;
+        const newNode: IGraphNode = {
+            id,
+            type,
+            title: type === 'pair' ? 'Pairing Node' : type === 'bus' ? 'Shared Bus' : `New ${type}`,
+            portPath: type === 'pair' ? 'Bridge' : type === 'bus' ? 'Bus' : type === 'physical' ? 'COM1' : `COM${nodes.length + 10}`,
+            position: { x: 100 + Math.abs(pan.x / scale), y: 100 + Math.abs(pan.y / scale) } // Center(ish)
+        };
+        const newNodes = [...nodes, newNode];
+        setNodes(newNodes);
+        virtualPortService.updateGraph(newNodes, edges);
+    };
 
-    // Helper to get handle position (Duplicated from Canvas for now)
+    // Helper to get handle position
     const getHandlePos = (nodeId: string, type: 'source' | 'target') => {
         const node = nodes.find(n => n.id === nodeId);
         if (!node) return { x: 0, y: 0 };
-        const NODE_WIDTH = 140;
-        // const NODE_HEIGHT = 80;
-        const cy = node.position.y + 40; // Approximate center
-        if (type === 'source') return { x: node.position.x + NODE_WIDTH + 6, y: cy };
-        return { x: node.position.x - 6, y: cy };
+        return GraphLayout.getPortCoordinates(node, type);
     };
 
     const handleHandleMouseDown = (nodeId: string, type: 'source' | 'target') => {
@@ -205,19 +254,34 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
         tempEdgeRef.current = null;
     };
 
+    const clearGraph = () => {
+        if (confirm('Are you sure you want to clear the entire graph?')) {
+            virtualPortService.updateGraph([], []);
+        }
+    };
+
 
     // --- Pan / Zoom / Drag Logic ---
     const [isPanning, setIsPanning] = useState(false);
     const lastPanObj = useRef({ x: 0, y: 0 });
 
     const handlePointerDown = (e: React.PointerEvent) => {
-        // Right click or Middle click
+        // Right click or Middle click - Pan
         if (e.button === 2 || e.button === 1) {
             e.preventDefault();
             setIsPanning(true);
             lastPanObj.current = { x: e.clientX, y: e.clientY };
-            // Capture pointer
             (e.target as Element).setPointerCapture(e.pointerId);
+        }
+        // Left click on background - Deselect
+        else if (e.button === 0) {
+            const target = e.target as HTMLElement;
+            // Check if clicking on the main container or the graph surface
+            // This allows deselecting when clicking empty space
+            if (target === e.currentTarget || target.getAttribute('data-id') === 'graph-surface') {
+                setSelectedNodeId(null);
+                setSelectedEdgeId(null);
+            }
         }
     };
 
@@ -247,21 +311,8 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            onWheel={(e) => {
-                if (e.ctrlKey) {
-                    // Zoom
-                    e.preventDefault();
-                    // Calc zoom around pointer? For now center or simple:
-                    const zoomDelta = e.deltaY * -0.001;
-                    const newScale = Math.min(Math.max(0.1, scale + zoomDelta), 5);
-                    // To zoom towards mouse, we need complex math adjusting Pan.
-                    // Simple scale for now.
-                    setScale(newScale);
-                } else {
-                    // Pan with wheel (if trackpad)
-                    // setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
-                }
-            }}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
         >
             {/* Grid Background */}
             <div className="absolute inset-0 pointer-events-none opacity-20"
@@ -281,7 +332,20 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
                     <button onClick={() => addNode('physical')} className="p-2 hover:bg-[#3c3c3c] text-[#ce9178]" title="Add Physical Node">
                         <Plus size={16} />
                     </button>
+                    <button onClick={() => addNode('pair')} className="p-2 hover:bg-[#3c3c3c] text-[#c586c0]" title="Add Logic: Pairing Node">
+                        <Link size={16} />
+                    </button>
+                    <button onClick={() => addNode('bus')} className="p-2 hover:bg-[#3c3c3c] text-[#dcdcaa]" title="Add Logic: Shared Bus">
+                        <Network size={16} />
+                    </button>
                     <div className="w-[1px] bg-[#3c3c3c]"></div>
+                    <button onClick={() => {
+                        if (confirm('Clear all legacy virtual ports (Pairs, Switches)? Graph nodes will remain.')) {
+                            virtualPortService.clearLegacyConfigs();
+                        }
+                    }} className="p-2 hover:bg-orange-900/50 text-orange-400" title="Clear Legacy/Orphaned Ports">
+                        <Eraser size={16} />
+                    </button>
                     <button onClick={clearGraph} className="p-2 hover:bg-red-900/50 text-red-400" title="Clear Graph">
                         <Trash2 size={16} />
                     </button>
@@ -298,28 +362,52 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
             {/* Graph Content */}
             <div
                 className="absolute inset-0 origin-top-left touch-none"
+                data-id="graph-surface"
                 style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})` }}
             >
+
                 <DndContext
                     sensors={sensors}
-                    onDragStart={() => {
-                        // Prevent conflict if needed? DndKit handles it usually if sensors configured right.
-                    }}
+                    onDragStart={handleDragStart}
+                    onDragMove={handleDragMove}
                     onDragEnd={handleDragEnd}
                 >
-                    <GraphCanvas nodes={nodes} edges={edges} tempEdge={tempEdge} />
+                    <GraphCanvas
+                        nodes={nodes}
+                        edges={edges}
+                        tempEdge={tempEdge}
+                        activeDrag={activeDrag}
+                        selectedEdgeId={selectedEdgeId}
+                        onEdgeSelect={(id) => {
+                            setSelectedEdgeId(id);
+                            setSelectedNodeId(null); // Deselect nodes when edge selected
+                        }}
+                    />
 
-                    {nodes.map(node => (
-                        <GraphNode
-                            key={node.id}
-                            {...node}
-                            x={node.position.x}
-                            y={node.position.y}
-                            isSelected={selectedNodeId === node.id}
-                            onSelect={(id) => setSelectedNodeId(id)}
-                            onHandleMouseDown={handleHandleMouseDown}
-                        />
-                    ))}
+                    {nodes.map(node => {
+                        // Apply active drag visually?? 
+                        // DndKit handles the transform of the DRAGGING item automatically for the dragger.
+                        // But GraphCanvas needs the position. 
+                        // AND strictly speaking, DndKit uses `transform` on the element.
+                        // We are not manually moving the node in render until DragEnd.
+                        // So GraphCanvas needs the `activeDrag` delta to adjust its calculation.
+                        // The Node itself is moved by DndKit's `useDraggable` transform.
+                        return (
+                            <GraphNode
+                                key={node.id}
+                                {...node}
+                                x={node.position.x}
+                                y={node.position.y}
+                                isSelected={selectedNodeId === node.id}
+                                onSelect={(id) => {
+                                    setSelectedNodeId(id);
+                                    setSelectedEdgeId(null);
+                                }}
+                                onHandleMouseDown={handleHandleMouseDown}
+                                scale={scale}
+                            />
+                        )
+                    })}
                 </DndContext>
             </div>
         </div>

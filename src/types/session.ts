@@ -43,6 +43,7 @@ export interface SerialSessionConfig extends BaseSessionConfig {
         fontFamily?: 'mono' | 'consolas' | 'courier';
         showTimestamp?: boolean;
         autoScroll?: boolean;
+        chunkTimeout?: number; // ms to merge consecutive RX chunks
     };
 }
 

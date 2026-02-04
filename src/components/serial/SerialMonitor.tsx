@@ -378,7 +378,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                                     </div>
 
                                     {/* Font Family */}
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between mb-2">
                                         <span className="text-[10px] text-[#969696]">Font:</span>
                                         <select
                                             className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
@@ -389,6 +389,26 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                                             <option value="consolas">Consolas</option>
                                             <option value="courier">Courier</option>
                                         </select>
+                                    </div>
+
+                                    {/* Chunk Timeout */}
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[10px] text-[#969696]" title="Merge logs if received within this time (ms)">Chunk Timeout:</span>
+                                        <input
+                                            type="number"
+                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5 w-16"
+                                            value={uiState.chunkTimeout || 0}
+                                            onChange={(e) => {
+                                                const val = parseInt(e.target.value);
+                                                const newTimeout = isNaN(val) ? 0 : Math.max(0, val);
+                                                // We need to update session config directly for this one as it affects logic
+                                                if (onUpdateConfig) {
+                                                    const currentUIState = (config as any).uiState || {};
+                                                    onUpdateConfig({ uiState: { ...currentUIState, chunkTimeout: newTimeout } } as any);
+                                                }
+                                            }}
+                                            placeholder="0"
+                                        />
                                     </div>
                                 </div>
                             </>

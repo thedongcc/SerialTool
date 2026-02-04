@@ -1,73 +1,73 @@
 import { GraphNode, GraphEdge } from '../VirtualPortService';
+import { GraphLayout } from './GraphStyles';
 
 interface GraphCanvasProps {
     nodes: GraphNode[];
     edges: GraphEdge[];
     tempEdge?: { sourceX: number, sourceY: number, targetX: number, targetY: number } | null;
+    activeDrag?: { id: string, delta: { x: number, y: number } } | null;
+    selectedEdgeId?: string | null;
+    onEdgeSelect?: (id: string) => void;
 }
 
-export const GraphCanvas = ({ nodes, edges, tempEdge }: GraphCanvasProps) => {
-    // Helper to get node handle positions
-    // In GraphNode, width is min-140px. Height variable but let's approximate center-side.
-    // Handles are at -Left and -Right.
-    // We assume width ~140, height ~80?
-    // Accurate calculation requires refs but for now we adjust offsets.
-    // Node left/top is at x,y.
-    // Input handle: x - 6, y + height/2
-    // Output handle: x + width + 6, y + height/2
+export const GraphCanvas = ({ nodes, edges, tempEdge, activeDrag, selectedEdgeId, onEdgeSelect }: GraphCanvasProps) => {
 
-    // Simplification: We assume a fixed approximate size for handles.
-    const NODE_WIDTH = 140;
-    const NODE_HEIGHT = 80; // approximate
+
 
     const getHandlePos = (nodeId: string, type: 'source' | 'target') => {
         const node = nodes.find(n => n.id === nodeId);
         if (!node) return { x: 0, y: 0 };
 
-        const cy = node.position.y + (NODE_HEIGHT / 2); // vertically centered roughly
-        // Ideally we measure the DOM but let's hardcode for the prototype.
-        // Actually, the node height is determined by content. Let's guess ~40px offset.
+        let { x, y } = node.position;
 
-        if (type === 'source') {
-            return { x: node.position.x + NODE_WIDTH, y: cy };
-        } else {
-            return { x: node.position.x, y: cy };
+        // Apply drag delta if this is the active node
+        if (activeDrag && activeDrag.id === nodeId) {
+            x += activeDrag.delta.x;
+            y += activeDrag.delta.y;
         }
+
+        // Use strict layout + drag position
+        return GraphLayout.getPortCoordinates({ position: { x, y } }, type);
     };
 
     const getBezierPath = (x1: number, y1: number, x2: number, y2: number) => {
+        // Horizontal Bezier
         const dist = Math.abs(x2 - x1);
-        const cp1x = x1 + dist * 0.5;
-        const cp2x = x2 - dist * 0.5;
-        // Ensure control points pull out horizontally
-        // Use a min distance for CP to avoid tight loops when close?
-        // Standard flowchart logic:
-        return `M ${x1} ${y1} C ${Math.max(x1 + 50, cp1x)} ${y1}, ${Math.min(x2 - 50, cp2x)} ${y2}, ${x2} ${y2}`;
+        const cp1x = x1 + Math.max(dist * 0.5, 30);
+        const cp2x = x2 - Math.max(dist * 0.5, 30);
+        // ComfyUI style: smooth S-curve
+        return `M ${x1} ${y1} C ${cp1x} ${y1}, ${cp2x} ${y2}, ${x2} ${y2}`;
     };
 
     return (
         <svg className="absolute inset-0 pointer-events-none w-full h-full overflow-visible z-0">
-            <defs>
-                {/* Gradient for wires? */}
-            </defs>
             {edges.map(edge => {
                 const src = getHandlePos(edge.sourceStr, 'source');
                 const tgt = getHandlePos(edge.targetStr, 'target');
+                const isSelected = selectedEdgeId === edge.id;
+
                 return (
-                    <g key={edge.id}>
+                    <g key={edge.id} className="pointer-events-auto">
+                        {/* Invisible thick path for easier clicking */}
                         <path
                             d={getBezierPath(src.x, src.y, tgt.x, tgt.y)}
-                            stroke="#555"
-                            strokeWidth="4"
+                            stroke="transparent"
+                            strokeWidth="15"
                             fill="none"
-                            className="transition-colors"
+                            className="cursor-pointer"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onEdgeSelect?.(edge.id);
+                            }}
                         />
+                        {/* Visible Wire */}
                         <path
                             d={getBezierPath(src.x, src.y, tgt.x, tgt.y)}
-                            stroke={edge.active ? "var(--vscode-textLink-foreground)" : "#666"}
-                            strokeWidth="2"
+                            stroke={isSelected ? "#4ec9b0" : (edge.active ? "var(--vscode-textLink-foreground)" : "#666")}
+                            strokeWidth={isSelected ? "3" : "2"}
                             fill="none"
-                            pointerEvents="visibleStroke" // Could allow clicking wire to delete
+                            className="pointer-events-none transition-colors"
                         />
                     </g>
                 );
@@ -79,6 +79,7 @@ export const GraphCanvas = ({ nodes, edges, tempEdge }: GraphCanvasProps) => {
                     strokeWidth="2"
                     strokeDasharray="5,5"
                     fill="none"
+                    className="pointer-events-none"
                 />
             )}
         </svg>

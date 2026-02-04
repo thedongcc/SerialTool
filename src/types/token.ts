@@ -25,10 +25,14 @@ export interface FlagConfig {
     name?: string; // Optional custom name
 }
 
+export interface HexConfig {
+    byteWidth: number; // e.g. 1, 3, 5
+}
+
 export interface Token {
     id: string; // Unique ID
-    type: 'crc' | 'auto_inc' | 'flag';
-    config: CRCConfig | AutoIncConfig | FlagConfig;
+    type: 'crc' | 'auto_inc' | 'flag' | 'hex';
+    config: CRCConfig | AutoIncConfig | FlagConfig | HexConfig;
 }
 
 // A segment represents a chunk of the input: either static text/hex or a dynamic token
@@ -36,4 +40,5 @@ export interface Segment {
     id: string;
     type: 'text' | 'token';
     content: string | Token; // if text, raw string. if token, the Token object
+    children?: Segment[]; // For container tokens like 'hex'
 }

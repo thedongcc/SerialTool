@@ -8,6 +8,7 @@ import { MessagePipeline } from '../../services/MessagePipeline';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { SerialToken } from './SerialTokenExtension';
+import { HexToken } from './HexTokenExtension';
 import { SERIAL_TOKEN_CLICK_EVENT } from './SerialTokenComponent';
 
 interface SerialInputProps {
@@ -45,6 +46,7 @@ export const SerialInput = ({
         extensions: [
             StarterKit,
             SerialToken,
+            HexToken,
         ],
         content: initialHTML || initialContent,
         editorProps: {
@@ -109,6 +111,12 @@ export const SerialInput = ({
             } as CRCConfig;
         } else if (type === 'flag') {
             config = { hex: 'AA', name: '' } as FlagConfig;
+        } else if (type === 'hex') {
+            // For hex, we use the custom command if available or generic insert
+            config = { byteWidth: 1 };
+            // @ts-ignore
+            editor.chain().focus().toggleHexToken({ config }).run();
+            return; // handled
         }
         editor.chain().focus().insertSerialToken({ type, config }).run();
     };
@@ -192,6 +200,12 @@ export const SerialInput = ({
                     onClick={() => insertToken('flag')}>
                     <Flag size={14} className="text-[#4ec9b0]" />
                     <span>Add Flag</span>
+                </button>
+                <div className="w-[1px] h-4 bg-[#3c3c3c] mx-1" />
+                <button className="flex items-center gap-1 px-2 py-0.5 bg-[#3c3c3c] hover:bg-[#4c4c4c] text-[12px] text-[#cccccc] rounded-sm transition-colors"
+                    onClick={() => insertToken('hex')}>
+                    <div className="flex items-center justify-center w-[14px] h-[14px] border border-[#4ec9b0] text-[#4ec9b0] text-[9px] font-mono rounded-[2px] leading-none">H</div>
+                    <span>Wrap Hex</span>
                 </button>
                 <div className="w-[1px] h-4 bg-[#3c3c3c] mx-1" />
                 <button className="flex items-center gap-1 px-2 py-0.5 hover:bg-[#3c3c3c] text-[12px] text-[#cccccc] rounded-sm transition-colors opacity-50 cursor-not-allowed" title="Load File">

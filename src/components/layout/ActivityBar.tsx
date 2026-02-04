@@ -229,7 +229,7 @@ export const ActivityBar = ({ activeView, onViewChange, onOpenSettings }: Activi
                                     id={id}
                                     icon={itemDef.icon}
                                     active={activeView === id}
-                                    onClick={() => onViewChange(id)}
+                                    onClick={() => onViewChange(activeView === id ? '' : id)}
                                 />
                             );
                         })}

@@ -197,6 +197,15 @@ export const ConfigSidebar = ({ sessionManager }: ConfigSidebarProps) => {
         );
     }
 
+    if (activeSession.config.type === 'graph') {
+        return (
+            <div className="p-4 text-[#969696] text-xs text-center mt-10">
+                Graph Editor Active<br />
+                No sidebar settings available.
+            </div>
+        );
+    }
+
     // Default to Serial
     return <SerialConfigPanel session={activeSession} sessionManager={sessionManager} />;
 };

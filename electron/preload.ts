@@ -99,3 +99,21 @@ contextBridge.exposeInMainWorld('sessionAPI', {
   save: (sessions: any[]) => ipcRenderer.invoke('session:save', sessions),
   load: () => ipcRenderer.invoke('session:load')
 });
+
+contextBridge.exposeInMainWorld('com0comAPI', {
+  exec: (command: string) => ipcRenderer.invoke('com0com:exec', command),
+  installDriver: () => ipcRenderer.invoke('com0com:install')
+});
+
+contextBridge.exposeInMainWorld('tcpAPI', {
+  start: (port: number) => ipcRenderer.invoke('tcp:start', port),
+  stop: (port: number) => ipcRenderer.invoke('tcp:stop', port),
+  write: (port: number, data: any) => ipcRenderer.invoke('tcp:write', { port, data }),
+  onData: (callback: (port: number, data: Uint8Array) => void) => {
+    const listener = (_: any, args: { port: number, data: Uint8Array }) => {
+      callback(args.port, args.data);
+    };
+    ipcRenderer.on('tcp:data', listener);
+    return () => ipcRenderer.off('tcp:data', listener);
+  }
+});

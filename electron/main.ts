@@ -402,12 +402,188 @@ function createWindow() {
     win?.webContents.send('main-process-message', (new Date).toLocaleString())
   })
 
-  if (VITE_DEV_SERVER_URL) {
-    win.loadURL(VITE_DEV_SERVER_URL)
-  } else {
-    // win.loadFile('dist/index.html')
-    win.loadFile(path.join(RENDERER_DIST, 'index.html'))
-  }
+  // Com0Com Integration
+  const { exec } = require('node:child_process');
+
+  ipcMain.handle('com0com:exec', async (_event, command) => {
+    return new Promise((resolve) => {
+      // Only allow setupc commands for security (basic check)
+      if (!command.startsWith('setupc')) {
+        return resolve({ success: false, error: 'Unauthorized command' });
+      }
+
+      const execCommand = (cmd: string) => {
+        exec(cmd, (error: any, stdout: string, stderr: string) => {
+          if (error) {
+            console.log(`[com0com] Command failed: ${cmd}`, error.message);
+            // If it was the first try (just 'setupc'), and it failed, try the local path
+            if (cmd.startsWith('setupc') && !cmd.includes('\\') && !cmd.includes('/')) {
+              const localSetupc = path.join(app.getPath('userData'), 'drivers', 'com0com', 'setupc.exe');
+              console.log(`[com0com] Trying local path: ${localSetupc}`);
+              // Check if local exists before trying?
+              // Or just try executing it.
+              // We replace 'setupc' with "localPath"
+
+              // Use spawn properly with CWD
+              const { spawn } = require('node:child_process');
+              const dir = path.dirname(localSetupc);
+
+              // Parse args from original command
+              // command is like "setupc install PortName=COM11 PortName=COM12"
+              // We need args: ["install", "PortName=COM11", "PortName=COM12"]
+              // Remove "setupc" prefix
+              const argsString = cmd.substring(6).trim();
+              const args = argsString.split(/\s+/);
+
+              console.log(`[com0com] Spawning: ${localSetupc} in ${dir} with args:`, args);
+
+              const child = spawn(localSetupc, args, {
+                cwd: dir,
+                shell: true, // Needed? setupc is .exe. usually ok without if full path. but for UAC maybe?
+                // If shell: true, verify if we need to quote args. spawn handles array args well usually.
+              });
+
+              let out = '';
+              let errOut = '';
+
+              child.stdout.on('data', (d: any) => out += d.toString());
+              child.stderr.on('data', (d: any) => errOut += d.toString());
+
+              child.on('error', (e: any) => {
+                console.log(`[com0com] Spawn error:`, e);
+                resolve({ success: false, error: e.message, stderr: errOut });
+              });
+
+              child.on('close', (code: number) => {
+                if (code === 0) {
+                  console.log(`[com0com] Spawn success`);
+                  resolve({ success: true, stdout: out });
+                } else {
+                  console.log(`[com0com] Spawn exited with ${code}`);
+                  resolve({ success: false, error: `Process exited with code ${code}`, stderr: errOut });
+                }
+              });
+            } else {
+              resolve({ success: false, error: error.message, stderr });
+            }
+          } else {
+            resolve({ success: true, stdout });
+          }
+        });
+      };
+
+      execCommand(command);
+    });
+  });
+
+  ipcMain.handle('com0com:install', async () => {
+    const isDev = !!VITE_DEV_SERVER_URL;
+    // In Dev: project_root/dist-electron/main.js -> project_root/resources/drivers/com0com_setup.exe
+    // In Prod: resources/resources/drivers/... (nested resources due to extraResources)
+
+    let installerPath = '';
+    if (isDev) {
+      installerPath = path.join(__dirname, '../resources/drivers/com0com_setup.exe');
+    } else {
+      installerPath = path.join(process.resourcesPath, 'resources/drivers/com0com_setup.exe');
+    }
+
+    const targetDir = path.join(app.getPath('userData'), 'drivers', 'com0com');
+
+    // Ensure installer exists and is a file
+    try {
+      const stats = await fs.stat(installerPath);
+      if (!stats.isFile()) {
+        return { success: false, error: `Installer path is not a file: ${installerPath}` };
+      }
+    } catch {
+      // Fallback for dev/testing if file not present
+      return { success: false, error: `Installer not found at: ${installerPath}` };
+    }
+
+    // Command args for NSIS installer (Com0Com uses NSIS usually)
+    // /S = Silent
+    // /D=Path = Dest dir (must be last argument and contain no quotes, even if path has spaces)
+    // Warning: Installing drivers usually requires UAC. Silent install might fail if not run as Admin.
+    // If we can't do silent, we just launch it.
+
+    // User requested "Show prompt if user allows".
+    // We will try running it. If it triggers UAC, that's fine.
+
+    return new Promise((resolve) => {
+      const { spawn } = require('node:child_process');
+      // Use shell: true to help with UAC elevation and execution
+      const child = spawn(installerPath, ['/S', `/D=${targetDir}`], {
+        windowsHide: false,
+        shell: true,
+        cwd: path.dirname(installerPath)
+      });
+
+      child.on('error', (err: any) => {
+        resolve({ success: false, error: err.message });
+      });
+
+      child.on('close', (code: number) => {
+        if (code === 0) {
+          resolve({ success: true, path: targetDir });
+        } else {
+          resolve({ success: false, error: `Installer exited with code ${code}` });
+        }
+      });
+    });
+  });
+
+
+  // ... existing child spawn code ...
+});
+
+// --- TCP Service Integration ---
+const { TcpService } = require('./TcpService');
+// We need to initialize this after 'win' is created.
+// But 'createWindow' is called multiple times?
+// Actually, 'createWindow' creates 'win'.
+// We can attach the service to the window or keep a global one if single instance.
+// For simplicity, let's look at where 'win' is defined.
+// It's a let binding at top level.
+
+// We'll initialize it inside createWindow to ensure fresh webContents
+// But we need to avoid re-adding IPC handlers.
+
+// Refactoring strategy:
+// IPC handlers usually static.
+// But the Service needs the webContents instance.
+
+// Let's create a global reference
+let tcpService: any = null;
+
+ipcMain.handle('tcp:start', async (_event, port: number) => {
+  if (!tcpService) return { success: false, error: 'Service not initialized' };
+  return tcpService.startServer(port);
+});
+
+ipcMain.handle('tcp:stop', async (_event, port: number) => {
+  if (!tcpService) return false;
+  return tcpService.stopServer(port);
+});
+
+ipcMain.handle('tcp:write', async (_event, { port, data }) => {
+  if (tcpService) tcpService.write(port, data);
+  return true;
+});
+
+if (VITE_DEV_SERVER_URL) {
+  win.loadURL(VITE_DEV_SERVER_URL)
+} else {
+  win.loadFile(path.join(RENDERER_DIST, 'index.html'))
+}
+
+// Initialize TCP Service with this window
+// Note: TcpService.ts needs to be compiled to JS if using TS.
+// Since this is electron/main.ts (TS), TcpService.ts (TS) should be fine if built together.
+// But 'require' might expect .js or .ts depending on setup.
+// Assuming tsc/vite handles it.
+tcpService = new TcpService(win.webContents);
+
 }
 
 // Quit when all windows are closed, except on macOS. There, it's common

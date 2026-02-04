@@ -324,6 +324,56 @@ function createWindow() {
   win.webContents.on("did-finish-load", () => {
     win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
   });
+  const { exec } = require("node:child_process");
+  electron.ipcMain.handle("com0com:exec", async (_event, command) => {
+    return new Promise((resolve) => {
+      if (!command.startsWith("setupc")) {
+        return resolve({ success: false, error: "Unauthorized command" });
+      }
+      exec(command, (error, stdout, stderr) => {
+        if (error) {
+          resolve({ success: false, error: error.message, stderr });
+        } else {
+          resolve({ success: true, stdout });
+        }
+      });
+    });
+  });
+  electron.ipcMain.handle("com0com:install", async () => {
+    const isDev = !!VITE_DEV_SERVER_URL;
+    let installerPath = "";
+    if (isDev) {
+      installerPath = path.join(__dirname, "../resources/drivers/com0com_setup.exe");
+    } else {
+      installerPath = path.join(process.resourcesPath, "resources/drivers/com0com_setup.exe");
+    }
+    const targetDir = path.join(electron.app.getPath("userData"), "drivers", "com0com");
+    try {
+      const stats = await fs.stat(installerPath);
+      if (!stats.isFile()) {
+        return { success: false, error: `Installer path is not a file: ${installerPath}` };
+      }
+    } catch {
+      return { success: false, error: `Installer not found at: ${installerPath}` };
+    }
+    return new Promise((resolve) => {
+      const { spawn } = require("node:child_process");
+      const child = spawn(installerPath, ["/S", `/D=${targetDir}`], {
+        windowsHide: false,
+        shell: true
+      });
+      child.on("error", (err) => {
+        resolve({ success: false, error: err.message });
+      });
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve({ success: true, path: targetDir });
+        } else {
+          resolve({ success: false, error: `Installer exited with code ${code}` });
+        }
+      });
+    });
+  });
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL);
   } else {

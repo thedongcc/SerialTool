@@ -22,7 +22,21 @@ export const parseDOM = (root: HTMLElement): Segment[] => {
             const el = node as HTMLElement;
             if (el.hasAttribute('data-token-id')) {
                 const id = el.getAttribute('data-token-id')!;
-                segments.push({ id, type: 'token', content: { id } as any }); // Content isn't fully needed here, just ID ref
+                const type = el.getAttribute('data-token-type');
+
+                if (type === 'hex') {
+                    // Recursive parsing for container token
+                    const children = parseDOM(el); // Helper needs to return Segments
+                    // Note: parseDOM calls itself.
+                    segments.push({
+                        id,
+                        type: 'token',
+                        content: { id, type: 'hex' } as any,
+                        children // Attach children
+                    });
+                } else {
+                    segments.push({ id, type: 'token', content: { id } as any });
+                }
             } else {
                 // Traverse children
                 el.childNodes.forEach(traverse);
@@ -114,6 +128,34 @@ export const compileSegments = (
                 const bytes = parseHex(config.hex || '');
                 parts.push(bytes);
                 currentTotalLength += bytes.length;
+            } else if (token.type === 'hex' && segment.children) {
+                // Hex Container
+                // 1. Recursive Compilation
+                // Note: Inner tokens are looked up in the SAME global tokens map (flattened by TipTap)
+                const innerBytes = compileSegments(segment.children, mode, tokens);
+
+                // 2. Resize
+                const config = token.config as any; // Cast to HexConfig
+                const targetWidth = config.byteWidth || 1;
+
+                // Resize Logic:
+                // Pad Left with 0s if smaller.
+                // Keep LSB (Truncate Left) if larger. 
+                // E.g. [0x19, 0xBB] -> Width 1 -> [0xBB]
+                // [0x05] -> Width 3 -> [0x00, 0x00, 0x05]
+                const finalBytes = new Uint8Array(targetWidth);
+
+                if (innerBytes.length >= targetWidth) {
+                    // Take last N bytes
+                    finalBytes.set(innerBytes.slice(innerBytes.length - targetWidth));
+                } else {
+                    // Pad left (default 0 init) -> set at offset
+                    // [0, 0, 0] <-- [0x05] (len 1). Offset = 3-1 = 2.
+                    finalBytes.set(innerBytes, targetWidth - innerBytes.length);
+                }
+
+                parts.push(finalBytes);
+                currentTotalLength += finalBytes.length;
             }
         }
     }

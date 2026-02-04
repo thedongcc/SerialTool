@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Token, CRCConfig, FlagConfig } from '../../types/token';
+import { Token, CRCConfig, FlagConfig, HexConfig } from '../../types/token';
 import { X, Check } from 'lucide-react';
 
 interface TokenConfigPopoverProps {
@@ -12,7 +12,7 @@ interface TokenConfigPopoverProps {
 
 export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, position }: TokenConfigPopoverProps) => {
     const popoverRef = useRef<HTMLDivElement>(null);
-    const [config, setConfig] = useState<CRCConfig | FlagConfig>(token.config);
+    const [config, setConfig] = useState<CRCConfig | FlagConfig | HexConfig>(token.config);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -65,6 +65,27 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                             onKeyDown={handleKeyDown}
                         />
                         <p className="text-[10px] text-[#666]">Enter hex bytes separated by space</p>
+                    </div>
+                </div>
+            );
+        }
+
+        if (token.type === 'hex') {
+            const hexConfig = config as HexConfig;
+            return (
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[11px] text-[#969696]">Byte Width</label>
+                        <input
+                            type="number"
+                            min="1"
+                            max="8"
+                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
+                            value={hexConfig.byteWidth || 1}
+                            onChange={e => setConfig({ ...hexConfig, byteWidth: Math.max(1, parseInt(e.target.value) || 1) })}
+                            onKeyDown={handleKeyDown}
+                        />
+                        <p className="text-[10px] text-[#666]">Target size in bytes (pads with 00 or truncates)</p>
                     </div>
                 </div>
             );

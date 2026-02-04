@@ -421,21 +421,60 @@ export const useSessionManager = () => {
             if (!registeredSessions.current.has(session.id)) {
                 // Register
                 const cleanupData = window.serialAPI.onData(session.id, (data) => {
-                    // Check RX CRC
-                    // We need latest config... careful with closures.
-                    // Use a functional state update or ref to get latest config if needed
-                    // For now, simpler: we assume this effect runs often effectively or we use refs.
-                    // Actually, since CRC config is inside session state, we need access to it.
-                    // The best way is to pass the data processing to a localized component or use a ref for the sessions state.
-
-                    // Let's use the functional update pattern which gives us access to latest state
                     setSessions(prev => {
                         const s = prev.find(x => x.id === session.id);
                         if (!s) return prev;
-                        const isOk = validateRXCRC(data, s.config.rxCRC);
-                        const newLogs = [...s.logs, { type: 'RX', data, timestamp: Date.now(), crcStatus: s.config.rxCRC.enabled ? (isOk ? 'ok' : 'error') : 'none' } as LogEntry];
-                        if (newLogs.length > MAX_LOGS) newLogs.shift();
-                        return prev.map(x => x.id === session.id ? { ...x, logs: newLogs } : x);
+
+                        const now = Date.now();
+                        const logs = s.logs;
+                        const lastLog = logs[logs.length - 1];
+                        const timeout = s.config.uiState?.chunkTimeout ?? 100; // Default 100ms if not set? Or 0? Let's say 0 is disabled, but user requested feature so default should probably be sensible or 0.
+                        // Actually, if feature is "added", default probably 0 (disabled) to preserve old behavior, or small value.
+                        // Let's rely on config.
+
+                        const shouldMerge = lastLog &&
+                            lastLog.type === 'RX' &&
+                            timeout > 0 &&
+                            (now - lastLog.timestamp) < timeout;
+
+                        if (shouldMerge) {
+                            // Merge
+                            let newData: Uint8Array | string;
+                            if (typeof lastLog.data === 'string' && typeof data === 'string') {
+                                newData = lastLog.data + data;
+                            } else {
+                                // Convert both to Uint8Array
+                                const oldArr = typeof lastLog.data === 'string' ? new TextEncoder().encode(lastLog.data) : lastLog.data;
+                                const newArr = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+                                const merged = new Uint8Array(oldArr.length + newArr.length);
+                                merged.set(oldArr);
+                                merged.set(newArr, oldArr.length);
+                                newData = merged;
+                            }
+
+                            // Update last log
+                            // Re-validate CRC on full packet? Or just status?
+                            // If we merge, we are building a larger packet. CRC might become valid.
+                            const isOk = s.config.rxCRC?.enabled ? validateRXCRC(newData, s.config.rxCRC) : false;
+                            const crcStatus = s.config.rxCRC?.enabled ? (isOk ? 'ok' : 'error') : 'none';
+
+                            const newLogs = [...logs];
+                            newLogs[newLogs.length - 1] = {
+                                ...lastLog,
+                                data: newData,
+                                timestamp: now, // Update timestamp to now? Or keep start time? Updating 'now' extends the timeout window (sliding window).
+                                crcStatus
+                            } as LogEntry;
+
+                            return prev.map(x => x.id === session.id ? { ...x, logs: newLogs } : x);
+
+                        } else {
+                            // New Log
+                            const isOk = validateRXCRC(data, s.config.rxCRC);
+                            const newLogs = [...s.logs, { type: 'RX', data, timestamp: now, crcStatus: s.config.rxCRC.enabled ? (isOk ? 'ok' : 'error') : 'none' } as LogEntry];
+                            if (newLogs.length > MAX_LOGS) newLogs.shift();
+                            return prev.map(x => x.id === session.id ? { ...x, logs: newLogs } : x);
+                        }
                     });
                 });
 
@@ -466,10 +505,42 @@ export const useSessionManager = () => {
                         setSessions(prev => {
                             const s = prev.find(x => x.id === session.id);
                             if (!s) return prev;
-                            const isOk = validateRXCRC(data, s.config.rxCRC);
-                            const newLogs = [...s.logs, { type: 'RX', data, timestamp: Date.now(), crcStatus: s.config.rxCRC.enabled ? (isOk ? 'ok' : 'error') : 'none' } as LogEntry];
-                            if (newLogs.length > MAX_LOGS) newLogs.shift();
-                            return prev.map(x => x.id === session.id ? { ...x, logs: newLogs } : x);
+
+                            const now = Date.now();
+                            const logs = s.logs;
+                            const lastLog = logs[logs.length - 1];
+                            const timeout = s.config.uiState?.chunkTimeout ?? 0;
+
+                            const shouldMerge = lastLog &&
+                                lastLog.type === 'RX' &&
+                                timeout > 0 &&
+                                (now - lastLog.timestamp) < timeout;
+
+                            if (shouldMerge) {
+                                // Merge logic (Uint8Array mostly for virtual)
+                                const oldArr = typeof lastLog.data === 'string' ? new TextEncoder().encode(lastLog.data) : lastLog.data;
+                                const newArr = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+                                const merged = new Uint8Array(oldArr.length + newArr.length);
+                                merged.set(oldArr);
+                                merged.set(newArr, oldArr.length);
+
+                                const isOk = s.config.rxCRC?.enabled ? validateRXCRC(merged, s.config.rxCRC) : false;
+                                const crcStatus = s.config.rxCRC?.enabled ? (isOk ? 'ok' : 'error') : 'none';
+
+                                const newLogs = [...logs];
+                                newLogs[newLogs.length - 1] = {
+                                    ...lastLog,
+                                    data: merged,
+                                    timestamp: now,
+                                    crcStatus
+                                } as LogEntry;
+                                return prev.map(x => x.id === session.id ? { ...x, logs: newLogs } : x);
+                            } else {
+                                const isOk = validateRXCRC(data, s.config.rxCRC);
+                                const newLogs = [...s.logs, { type: 'RX', data, timestamp: now, crcStatus: s.config.rxCRC.enabled ? (isOk ? 'ok' : 'error') : 'none' } as LogEntry];
+                                if (newLogs.length > MAX_LOGS) newLogs.shift();
+                                return prev.map(x => x.id === session.id ? { ...x, logs: newLogs } : x);
+                            }
                         });
                     });
                     cleanupRefs.current.set(key, [unsub]);
@@ -615,7 +686,17 @@ export const useSessionManager = () => {
         listPorts();
         loadSavedSessions();
         const interval = setInterval(listPorts, 5000);
-        return () => clearInterval(interval);
+
+        // Subscribe to Virtual Port changes for immediate update
+        const unsub = virtualPortService.subscribeState(() => {
+            console.log('[SM] Virtual Ports changed, refreshing list...');
+            listPorts();
+        });
+
+        return () => {
+            clearInterval(interval);
+            unsub();
+        };
     }, [listPorts, loadSavedSessions]);
 
 
@@ -639,6 +720,14 @@ export const useSessionManager = () => {
         listPorts,
         saveSession,
         deleteSession,
-        openSavedSession
+        saveSession,
+        deleteSession,
+        openSavedSession,
+        reorderSessions: useCallback(async (newOrder: SessionConfig[]) => {
+            setSavedSessions(newOrder);
+            if (window.sessionAPI) {
+                await window.sessionAPI.save(newOrder);
+            }
+        }, [savedSessions])
     };
 };

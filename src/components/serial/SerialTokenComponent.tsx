@@ -1,5 +1,5 @@
 import React from 'react';
-import { NodeViewWrapper, NodeViewProps } from '@tiptap/react';
+import { NodeViewWrapper, NodeViewContent, NodeViewProps } from '@tiptap/react';
 
 // Define event for interaction
 export const SERIAL_TOKEN_CLICK_EVENT = 'serial-token-click';
@@ -8,16 +8,52 @@ export const SerialTokenComponent: React.FC<NodeViewProps> = ({ node, getPos, se
     const { id, type, config } = node.attrs;
 
     const handleClick = (e: React.MouseEvent) => {
-        // e.preventDefault();
         e.stopPropagation();
-        const rect = (e.target as HTMLElement).getBoundingClientRect();
+        const target = e.currentTarget as HTMLElement; // Use currentTarget to ensure we get the label/box, not inner content
+        const rect = target.getBoundingClientRect();
 
         // Dispatch custom event that SerialInput listens to
+        // If it's Hex, we want to click the label.
         const event = new CustomEvent(SERIAL_TOKEN_CLICK_EVENT, {
             detail: { id, type, config, x: rect.left, y: rect.bottom, pos: getPos() }
         });
         window.dispatchEvent(event);
     };
+
+    if (type === 'hex') {
+        const byteWidth = config.byteWidth || 1;
+        return (
+            <NodeViewWrapper as="span" className="inline-flex flex-col align-middle mx-1 vertical-align-middle">
+                {/* Container */}
+                <span
+                    className={`
+                        inline-flex flex-row items-stretch
+                        border border-[#4c4c4c] rounded-[3px] bg-[#2d2d2d]
+                        ${selected ? 'ring-1 ring-[var(--vscode-focusBorder)]' : ''}
+                    `}
+                >
+                    {/* Header/Label - Clickable for Config */}
+                    <span
+                        contentEditable={false}
+                        onClick={handleClick}
+                        className="
+                            bg-[#3c3c3c] text-[#cccccc] text-[10px] font-mono
+                            px-1 flex items-center justify-center cursor-pointer select-none
+                            hover:bg-[#505050] border-r border-[#4c4c4c]
+                        "
+                        title="Click to configure Byte Width"
+                    >
+                        HEX:{byteWidth}
+                    </span>
+
+                    {/* Content Area */}
+                    <span className="px-1 text-[var(--st-input-text)]">
+                        <NodeViewContent as="span" />
+                    </span>
+                </span>
+            </NodeViewWrapper>
+        );
+    }
 
     let label = 'Unknown';
     if (type === 'crc') {

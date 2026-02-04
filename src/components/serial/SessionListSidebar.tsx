@@ -4,6 +4,9 @@ import { useSessionManager } from '../../hooks/useSessionManager';
 import { useEditorLayout } from '../../hooks/useEditorLayout';
 import { NewSessionDialog } from '../session/NewSessionDialog';
 import { SessionType } from '../../types/session';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SessionListItem } from './SessionListItem';
 
 interface SessionListSidebarProps {
     sessionManager: ReturnType<typeof useSessionManager>;
@@ -23,6 +26,25 @@ export const SessionListSidebar = ({ sessionManager, editorLayout }: SessionList
         document.addEventListener('click', handleClick);
         return () => document.removeEventListener('click', handleClick);
     }, []);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (active.id !== over?.id) {
+            const oldIndex = sessionManager.savedSessions.findIndex((s) => s.id === active.id);
+            const newIndex = sessionManager.savedSessions.findIndex((s) => s.id === over?.id);
+
+            if (oldIndex !== -1 && newIndex !== -1) {
+                const newOrder = arrayMove(sessionManager.savedSessions, oldIndex, newIndex);
+                sessionManager.reorderSessions(newOrder);
+            }
+        }
+    };
 
     const handleSelectSessionType = (type: SessionType) => {
         setShowNewSessionDialog(false);
@@ -68,13 +90,7 @@ export const SessionListSidebar = ({ sessionManager, editorLayout }: SessionList
         setContextMenu({ x: e.clientX, y: e.clientY, sessionId });
     };
 
-    const getIconForType = (type: SessionType) => {
-        switch (type) {
-            case 'mqtt': return <Network size={14} />;
-            case 'serial': return <Cpu size={14} />;
-            default: return <FolderOpen size={14} />;
-        }
-    };
+
 
     return (
         <div className="flex flex-col h-full bg-[var(--vscode-sidebar)] text-[var(--vscode-fg)] relative">
@@ -94,47 +110,37 @@ export const SessionListSidebar = ({ sessionManager, editorLayout }: SessionList
                         No saved sessions.<br />Click '+' to create one.
                     </div>
                 )}
-                {sessionManager.savedSessions.filter(s => s.type !== 'settings').map(session => (
-                    <div
-                        key={session.id}
-                        className={`px-4 py-1.5 text-[13px] hover:bg-[var(--vscode-list-hover)] cursor-pointer flex items-center gap-2 group border-l-2 ${sessionManager.activeSessionId === session.id ? 'border-[var(--vscode-accent)] bg-[var(--vscode-list-active)]' : 'border-transparent'}`}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            if (editingId !== session.id) {
-                                sessionManager.openSavedSession(session);
-                                editorLayout.openSession(session.id);
-                            }
-                        }}
-                        onContextMenu={(e) => handleContextMenu(e, session.id)}
-                        title="Click to open, Right-click for options"
+                <DndContext
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                    sensors={sensors}
+                >
+                    <SortableContext
+                        items={sessionManager.savedSessions.filter(s => s.type !== 'settings').map(s => s.id)}
+                        strategy={verticalListSortingStrategy}
                     >
-                        <span className={`${session.type === 'mqtt' ? 'text-[#4ec9b0]' : 'text-[#e8b575]'}`}>
-                            {getIconForType(session.type)}
-                        </span>
-
-                        {editingId === session.id ? (
-                            <input
-                                autoFocus
-                                className="bg-[var(--vscode-input-bg)] text-[13px] text-[var(--vscode-input-fg)] border border-[var(--vscode-focusBorder)] outline-none flex-1 min-w-0"
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                onBlur={saveEdit}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') saveEdit();
-                                    if (e.key === 'Escape') setEditingId(null);
+                        {sessionManager.savedSessions.filter(s => s.type !== 'settings').map(session => (
+                            <SessionListItem
+                                key={session.id}
+                                session={session}
+                                isActive={sessionManager.activeSessionId === session.id}
+                                isEditing={editingId === session.id}
+                                editName={editName}
+                                onEditNameChange={setEditName}
+                                onSaveEdit={saveEdit}
+                                onCancelEdit={() => setEditingId(null)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (editingId !== session.id) {
+                                        sessionManager.openSavedSession(session);
+                                        editorLayout.openSession(session.id);
+                                    }
                                 }}
-                                onClick={(e) => e.stopPropagation()}
+                                onContextMenu={(e) => handleContextMenu(e, session.id)}
                             />
-                        ) : (
-                            <div className="flex flex-col overflow-hidden flex-1">
-                                <span className="truncate font-medium">{session.name}</span>
-                                <span className="text-[10px] text-[#858585] truncate">
-                                    {session.type === 'serial' ? `${(session as any).connection?.path || 'No Port'}` : (session as any).brokerUrl || session.type}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                ))}
+                        ))}
+                    </SortableContext>
+                </DndContext>
             </div>
 
             {showNewSessionDialog && (

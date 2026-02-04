@@ -11,6 +11,7 @@ import { useEditorLayout, LayoutNode, LeafNode, findNode } from '../../hooks/use
 import {
     DndContext,
     closestCenter,
+    pointerWithin,
     KeyboardSensor,
     PointerSensor,
     useSensor,
@@ -48,19 +49,20 @@ const parseCompositeId = (id: string): { groupId: string, sessionId: string } | 
 interface TabProps {
     label: string;
     active?: boolean;
+    isGroupActive?: boolean;
     unsaved?: boolean;
     onClose: (e: React.MouseEvent) => void;
     onClick: () => void;
 }
 
-const Tab = ({ label, active, unsaved, onClose, onClick }: TabProps) => (
+const Tab = ({ label, active, isGroupActive, unsaved, onClose, onClick }: TabProps) => (
     <div
         onClick={onClick}
         className={`
     h-full px-3 min-w-[120px] max-w-[200px] flex items-center justify-between cursor-pointer border-r border-[var(--vscode-border)] select-none group
     ${active
-                ? 'bg-[var(--vscode-bg)] text-[var(--vscode-fg)] border-t-2 border-t-[var(--vscode-accent)]'
-                : 'bg-[var(--vscode-editor-widget-bg)] text-[#969696] hover:bg-[var(--vscode-bg)]'
+                ? `bg-[var(--vscode-bg)] ${isGroupActive ? 'text-[var(--vscode-fg)] border-t-[2px] border-t-[var(--vscode-accent)] font-bold tracking-wide' : 'text-[#777] border-t-2 border-t-transparent'}`
+                : 'bg-[var(--vscode-editor-widget-bg)] text-[#666] hover:bg-[var(--vscode-bg)]'
             }
 `}
         title={label}
@@ -91,9 +93,9 @@ const SortableTab = ({ id, ...props }: TabProps & { id: string }) => {
     } = useSortable({ id });
 
     const style = {
-        transform: CSS.Transform.toString(transform),
+        // transform: CSS.Transform.toString(transform), // Disable visual sorting
         transition,
-        opacity: isDragging ? 0.3 : 1,
+        opacity: 1, // Keep original fully visible during drag
         zIndex: isDragging ? 999 : 'auto',
     };
 
@@ -150,7 +152,7 @@ const HeaderDropZone = ({ id, children, className }: { id: string, children: Rea
 
 // --- Drop Indicator ---
 const DropIndicator = () => (
-    <div className="w-[3px] h-full bg-[#007fd4] absolute z-50 pointer-events-none shadow-[0_0_4px_rgba(0,0,0,0.5)] transform -translate-x-1/2" />
+    <div className="w-[3px] h-full bg-[#007fd4] absolute z-[2000] pointer-events-none shadow-[0_0_4px_rgba(0,0,0,0.5)] transform -translate-x-1/2" />
 );
 
 // --- Group Panel ---
@@ -186,25 +188,30 @@ const GroupPanel = ({ node, isActive, sessions, sessionManager, layoutActions, o
             )}
 
             <GroupHeader group={node} isActiveGroup={isActive} setActiveGroupId={setActiveGroupId}>
-                <HeaderDropZone id={`${node.id}-header`} className="flex-1 flex items-center overflow-x-auto scrollbar-hide h-full px-1">
+                <HeaderDropZone id={`${node.id}-header`} className="flex-1 flex items-center overflow-x-auto scrollbar-hide h-full px-1 relative">
+                    {activeDragId && (
+                        <DropZone
+                            id={`${node.id}-start`}
+                            className="absolute left-0 top-0 bottom-0 w-8 z-[60]"
+                            activeClassName="bg-transparent"
+                        />
+                    )}
                     <SortableContext items={node.views.map(v => getCompositeId(node.id, v))} strategy={horizontalListSortingStrategy}>
                         {node.views.map((viewId, idx) => {
                             const session = sessions.find(s => s.id === viewId);
                             if (!session) return null;
-                            const isActive = node.activeViewId === viewId;
+                            const isTabActive = node.activeViewId === viewId;
                             const compositeId = getCompositeId(node.id, viewId);
                             const showIndicatorBefore = dropIndicator?.groupId === node.id && dropIndicator.index === idx;
-                            // Indicator after last element is handled outside map if possible, but map recursion is easier. 
-                            // Actually, "index" could be equal to length.
-                            // We will handle "before" logic here. "After last" needs a special check relative to this item or after loop.
 
                             // Better approach: Wrap in Fragment, conditionally show indicator
                             return (
                                 <React.Fragment key={compositeId}>
-                                    {showIndicatorBefore && <div className="h-full w-[3px] relative flex flex-shrink-0 items-center justify-center overflow-visible z-50 -mr-[1.5px] -ml-[1.5px]"><DropIndicator /></div>}
+                                    {showIndicatorBefore && <div className="h-full w-[3px] relative flex flex-shrink-0 items-center justify-center overflow-visible z-[2000] -mr-[1.5px] -ml-[1.5px] pointer-events-none"><DropIndicator /></div>}
                                     <SortableTab
                                         id={compositeId}
-                                        active={isActive}
+                                        active={isTabActive}
+                                        isGroupActive={isActive}
                                         label={session.config.name || '(Unknown)'}
                                         onClick={() => {
                                             sessionManager.setActiveSessionId(viewId);
@@ -221,7 +228,7 @@ const GroupPanel = ({ node, isActive, sessions, sessionManager, layoutActions, o
                         })}
                         {/* Indicator at the very end */}
                         {dropIndicator?.groupId === node.id && dropIndicator.index === node.views.length && (
-                            <div className="h-full w-[3px] relative flex flex-shrink-0 items-center justify-center overflow-visible z-50 -ml-[1.5px]"><DropIndicator /></div>
+                            <div className="h-full w-[3px] relative flex flex-shrink-0 items-center justify-center overflow-visible z-[2000] -ml-[1.5px] pointer-events-none"><DropIndicator /></div>
                         )}
                     </SortableContext>
 
@@ -442,7 +449,7 @@ export const EditorArea = ({ children, sessionManager, editorLayout, onShowSetti
                     let insertIndex = hoverIndex;
 
                     if (activator && activator.clientX !== undefined) {
-                        const clientX = activator.clientX;
+                        const clientX = activator.clientX + event.delta.x; // Correctly calculate current position
                         const midpoint = overRect.left + (overRect.width / 2);
                         // If cursor is to the right of midpoint, insert AFTER
                         if (clientX > midpoint) {
@@ -454,14 +461,34 @@ export const EditorArea = ({ children, sessionManager, editorLayout, onShowSetti
                 }
             }
         }
-        // Case B: Dropped on a DropZone (e.g. Center or Header)
+        // Case B: Dropped on a DropZone (e.g. Center, Header, or Start)
         else {
-            if (overId.includes('-center') || overId.includes('-header')) {
-                const gId = overId.replace('-center', '').replace('-header', '');
+            if (overId.includes('-center') || overId.includes('-header') || overId.includes('-start')) {
+                const gId = overId.replace('-center', '').replace('-header', '').replace('-start', '');
                 const targetNode = findNode(layoutRef.current, gId) as LeafNode;
                 if (targetNode) {
-                    // Default to appending at end
-                    setDropIndicator({ groupId: gId, index: targetNode.views.length });
+                    if (overId.includes('-start')) {
+                        // Explicit insertion at start
+                        setDropIndicator({ groupId: gId, index: 0 });
+                    } else if (overId.includes('-header')) {
+                        // Header drop
+                        // Check for left-edge proximity as fallback for "Start Zone" misses
+                        const activator = event.activatorEvent as any;
+                        const overRect = over.rect;
+                        let insertIndex = targetNode.views.length;
+
+                        if (activator && activator.clientX !== undefined && overRect) {
+                            // Use a generous threshold (e.g., 60px) to catch "near start" drops that miss the explicit zone
+                            const currentClientX = activator.clientX + event.delta.x;
+                            if (currentClientX < overRect.left + 60) {
+                                insertIndex = 0;
+                            }
+                        }
+                        setDropIndicator({ groupId: gId, index: insertIndex });
+                    } else {
+                        // Center drop -> Append
+                        setDropIndicator({ groupId: gId, index: targetNode.views.length });
+                    }
                 }
             } else {
                 setDropIndicator(null);
@@ -487,10 +514,24 @@ export const EditorArea = ({ children, sessionManager, editorLayout, onShowSetti
             const zone = parts.pop();
             const targetGroupId = parts.join('-');
 
-            if (zone === 'center' || zone === 'header') {
-                // Determine index? Default to end
+            if (zone === 'center' || zone === 'header' || zone === 'start') {
                 const targetNode = findNode(layoutRef.current, targetGroupId) as LeafNode;
-                const idx = targetNode ? targetNode.views.length : 0;
+                let idx = targetNode ? targetNode.views.length : 0;
+
+                if (zone === 'start') {
+                    idx = 0;
+                } else if (zone === 'header' && targetNode) {
+                    // Fallback for header background drops
+                    const activator = event.activatorEvent as any;
+                    const overRect = over.rect;
+                    if (activator && activator.clientX !== undefined && overRect) {
+                        const currentClientX = activator.clientX + event.delta.x;
+                        if (currentClientX < overRect.left + 60) {
+                            idx = 0;
+                        }
+                    }
+                }
+
                 moveView(sourceGroupId, targetGroupId, activeSessionId, idx);
             } else if (['top', 'bottom', 'left', 'right'].includes(zone!)) {
                 splitDrop(sourceGroupId, targetGroupId, activeSessionId, zone as any);
@@ -511,7 +552,7 @@ export const EditorArea = ({ children, sessionManager, editorLayout, onShowSetti
                 // We should re-calc using activator event if possible, or reliable rect logic
                 const activator = event.activatorEvent as any;
                 if (activator && activator.clientX !== undefined) {
-                    const clientX = activator.clientX;
+                    const clientX = activator.clientX + event.delta.x; // Correctly calculate current position
                     const overRect = over.rect;
                     const midpoint = overRect.left + (overRect.width / 2);
                     if (clientX > midpoint) {
@@ -534,7 +575,7 @@ export const EditorArea = ({ children, sessionManager, editorLayout, onShowSetti
     return (
         <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={pointerWithin}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
@@ -557,7 +598,35 @@ export const EditorArea = ({ children, sessionManager, editorLayout, onShowSetti
                     </div>
                 )}
 
-                <DragOverlay dropAnimation={dropAnimation}>
+                <DragOverlay className="pointer-events-none" dropAnimation={dropAnimation} modifiers={[
+                    ({ activatorEvent, draggingNodeRect, transform }) => {
+                        if (draggingNodeRect && activatorEvent) {
+                            const activator = activatorEvent as any;
+                            // Ensure we have coordinates (PointerEvent)
+                            if (activator.clientX !== undefined && activator.clientY !== undefined) {
+                                // Calculate the offset of the grab point relative to the element's top-left
+                                const offsetX = activator.clientX - draggingNodeRect.left;
+                                const offsetY = activator.clientY - draggingNodeRect.top;
+
+                                // We want the element's top-left to jump to the cursor.
+                                // Currently, dnd-kit preserves the offset.
+                                // dnd-kit calculates: Position = InitialRect + Delta.
+                                // Delta = CurrentCursor - InitialCursor.
+                                // So Position = InitialRect + CurrentCursor - InitialCursor.
+                                // We want Position = CurrentCursor.
+                                // So we need to add (InitialCursor - InitialRect) to the Delta.
+                                // InitialCursor - InitialRect is exactly offsetX/Y.
+
+                                return {
+                                    ...transform,
+                                    x: transform.x + offsetX,
+                                    y: transform.y + offsetY,
+                                };
+                            }
+                        }
+                        return transform;
+                    }
+                ]}>
                     {activeDragId ? (
                         <div className="h-full px-3 bg-[var(--vscode-editor-widget-bg)] text-[var(--vscode-fg)] border-t-2 border-[var(--vscode-accent)] flex items-center min-w-[120px] pointer-events-none shadow-lg opacity-90">
                             <span className="text-[13px]">

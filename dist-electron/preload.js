@@ -91,3 +91,19 @@ electron.contextBridge.exposeInMainWorld("sessionAPI", {
   save: (sessions) => electron.ipcRenderer.invoke("session:save", sessions),
   load: () => electron.ipcRenderer.invoke("session:load")
 });
+electron.contextBridge.exposeInMainWorld("com0comAPI", {
+  exec: (command) => electron.ipcRenderer.invoke("com0com:exec", command),
+  installDriver: () => electron.ipcRenderer.invoke("com0com:install")
+});
+electron.contextBridge.exposeInMainWorld("tcpAPI", {
+  start: (port) => electron.ipcRenderer.invoke("tcp:start", port),
+  stop: (port) => electron.ipcRenderer.invoke("tcp:stop", port),
+  write: (port, data) => electron.ipcRenderer.invoke("tcp:write", { port, data }),
+  onData: (callback) => {
+    const listener = (_, args) => {
+      callback(args.port, args.data);
+    };
+    electron.ipcRenderer.on("tcp:data", listener);
+    return () => electron.ipcRenderer.off("tcp:data", listener);
+  }
+});

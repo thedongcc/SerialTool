@@ -16,6 +16,8 @@ interface SideBarProps {
 }
 
 export const SideBar = ({ activeView, onViewChange, sessionManager, editorLayout }: SideBarProps) => {
+    if (!activeView) return null;
+
     const { getPlugin } = usePluginManager();
     const activePlugin = getPlugin(activeView);
 
