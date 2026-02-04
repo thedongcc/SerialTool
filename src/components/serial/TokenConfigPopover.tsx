@@ -11,6 +11,7 @@ interface TokenConfigPopoverProps {
 }
 
 export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, position }: TokenConfigPopoverProps) => {
+    console.log('TokenConfigPopover Rendering:', { token, position });
     const popoverRef = useRef<HTMLDivElement>(null);
     const [config, setConfig] = useState<CRCConfig | FlagConfig | HexConfig>(token.config);
 
@@ -229,7 +230,7 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
         document.removeEventListener('mouseup', handleMouseUpResize);
     };
 
-    if (token.type !== 'crc' && token.type !== 'flag') return null;
+    if (token.type !== 'crc' && token.type !== 'flag' && token.type !== 'hex') return null;
 
     return (
         <div

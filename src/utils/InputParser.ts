@@ -26,8 +26,14 @@ export const parseDOM = (root: HTMLElement): Segment[] => {
 
                 if (type === 'hex') {
                     // Recursive parsing for container token
-                    const children = parseDOM(el); // Helper needs to return Segments
-                    // Note: parseDOM calls itself.
+                    // Try to find content wrapper (Editor DOM), fallback to element itself (Serialized HTML)
+                    const contentWrapper = el.querySelector('[data-content-wrapper]');
+                    console.log('Parser: Hex Token Found', { id, hasWrapper: !!contentWrapper, html: el.innerHTML });
+
+                    const targetEl = (contentWrapper || el) as HTMLElement;
+                    const children = parseDOM(targetEl);
+                    console.log('Parser: Hex Token Children', children);
+
                     segments.push({
                         id,
                         type: 'token',
@@ -133,6 +139,7 @@ export const compileSegments = (
                 // 1. Recursive Compilation
                 // Note: Inner tokens are looked up in the SAME global tokens map (flattened by TipTap)
                 const innerBytes = compileSegments(segment.children, mode, tokens);
+                console.log('Compiler: Hex Token Inner Bytes', { tokenId, bytes: innerBytes, width: token.config.byteWidth });
 
                 // 2. Resize
                 const config = token.config as any; // Cast to HexConfig

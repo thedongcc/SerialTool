@@ -42,6 +42,7 @@ export const SerialInput = ({
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     // TipTap Editor
+    console.log('SerialInput: Initializing editor with content:', { initialHTML, initialContent });
     const editor = useEditor({
         extensions: [
             StarterKit,
@@ -61,7 +62,7 @@ export const SerialInput = ({
                 const json = editor.getJSON();
                 const tokensMap: Record<string, Token> = {};
                 const traverse = (node: any) => {
-                    if (node.type === 'serialToken') {
+                    if (node.type === 'serialToken' || node.type === 'hexToken') {
                         const { id, type, config } = node.attrs;
                         tokensMap[id] = { id, type, config };
                     }
@@ -86,6 +87,9 @@ export const SerialInput = ({
                     mode,
                     lineEnding
                 });
+                // Debug: Log the full JSON to see content structure
+                console.log('Editor onUpdate JSON:', JSON.stringify(editor.getJSON(), null, 2));
+                console.log('Editor onUpdate HTML:', editor.getHTML());
             }
         },
     });
@@ -94,7 +98,8 @@ export const SerialInput = ({
     useEffect(() => {
         const handleTokenClick = (e: Event) => {
             const detail = (e as CustomEvent).detail;
-            setPopover({ id: detail.id, x: detail.x, y: detail.y, pos: detail.pos });
+            console.log('Token Click Event Received (Parent):', detail);
+            setPopover({ id: detail.id, type: detail.type, x: detail.x, y: detail.y, pos: detail.pos });
         };
         window.addEventListener(SERIAL_TOKEN_CLICK_EVENT, handleTokenClick);
         return () => window.removeEventListener(SERIAL_TOKEN_CLICK_EVENT, handleTokenClick);
@@ -123,7 +128,11 @@ export const SerialInput = ({
 
     const updateTokenConfig = (id: string, newConfig: any) => {
         if (!editor || !popover) return;
-        editor.chain().focus().setNodeSelection(popover.pos).updateAttributes('serialToken', { config: newConfig }).run();
+
+        // Determine the node type based on the popover's token type
+        const nodeType = popover.type === 'hex' ? 'hexToken' : 'serialToken';
+        console.log('updateTokenConfig:', { id, newConfig, nodeType, pos: popover.pos, popoverType: popover.type });
+        editor.chain().focus().setNodeSelection(popover.pos).updateAttributes(nodeType, { config: newConfig }).run();
     };
 
     const deleteToken = (id: string) => {
@@ -137,7 +146,7 @@ export const SerialInput = ({
         const json = editor.getJSON();
         const tokensMap: Record<string, Token> = {};
         const traverse = (node: any) => {
-            if (node.type === 'serialToken') {
+            if (node.type === 'serialToken' || node.type === 'hexToken') {
                 const { id, type, config } = node.attrs;
                 tokensMap[id] = { id, type, config };
             }
@@ -156,7 +165,9 @@ export const SerialInput = ({
 
         const html = editor.getHTML();
         const text = editor.getText();
+        const json = editor.getJSON();
         const tokensMap = extractTokens();
+        console.log('SerialInput handleSend:', { html, text, json: JSON.stringify(json, null, 2), tokensMap });
         const { data } = MessagePipeline.process(text, html, mode, tokensMap, lineEnding);
 
         onSend(data, mode);
@@ -258,11 +269,13 @@ export const SerialInput = ({
             {popover && editor && (() => {
                 let tokenData: Token | null = null;
                 const node = editor.state.doc.nodeAt(popover.pos);
-                if (node && node.type.name === 'serialToken' && node.attrs.id === popover.id) {
+                console.log('Popover Lookup:', { pos: popover.pos, nodeType: node?.type.name, nodeId: node?.attrs.id, targetId: popover.id });
+
+                if (node && (node.type.name === 'serialToken' || node.type.name === 'hexToken') && node.attrs.id === popover.id) {
                     tokenData = { id: popover.id, type: node.attrs.type, config: node.attrs.config };
                 } else {
                     editor.state.doc.descendants((n) => {
-                        if (n.type.name === 'serialToken' && n.attrs.id === popover.id) {
+                        if ((n.type.name === 'serialToken' || n.type.name === 'hexToken') && n.attrs.id === popover.id) {
                             tokenData = { id: popover.id, type: n.attrs.type, config: n.attrs.config };
                             return false;
                         }

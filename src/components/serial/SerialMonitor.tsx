@@ -35,6 +35,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const uiState = (config as any).uiState || {};
+    console.log('SerialMonitor: uiState loaded', { sessionId: session.id, inputHTML: uiState.inputHTML, inputContent: uiState.inputContent });
 
     // Display Settings State - Initialize from uiState
     const [viewMode, setViewMode] = useState<'text' | 'hex'>(uiState.viewMode || 'hex');

@@ -1,5 +1,6 @@
 import React from 'react';
 import { NodeViewWrapper, NodeViewContent, NodeViewProps } from '@tiptap/react';
+import { GripVertical } from 'lucide-react';
 
 // Define event for interaction
 export const SERIAL_TOKEN_CLICK_EVENT = 'serial-token-click';
@@ -12,6 +13,8 @@ export const SerialTokenComponent: React.FC<NodeViewProps> = ({ node, getPos, se
         const target = e.currentTarget as HTMLElement; // Use currentTarget to ensure we get the label/box, not inner content
         const rect = target.getBoundingClientRect();
 
+        console.log('SerialToken Clicked (Component):', { id, type, config });
+
         // Dispatch custom event that SerialInput listens to
         // If it's Hex, we want to click the label.
         const event = new CustomEvent(SERIAL_TOKEN_CLICK_EVENT, {
@@ -22,35 +25,41 @@ export const SerialTokenComponent: React.FC<NodeViewProps> = ({ node, getPos, se
 
     if (type === 'hex') {
         const byteWidth = config.byteWidth || 1;
+        // CRITICAL: NodeViewContent must not be nested inside contentEditable={false} elements
+        // Solution: Use a simple structure where NodeViewContent is the primary child
         return (
-            <NodeViewWrapper as="span" className="inline-flex flex-col align-middle mx-1 vertical-align-middle">
-                {/* Container */}
+            <NodeViewWrapper
+                as="span"
+                className="inline-flex items-center align-middle mx-0.5"
+                style={{
+                    border: '1px solid #4c4c4c',
+                    borderRadius: '3px',
+                    backgroundColor: '#2d2d2d',
+                    boxShadow: selected ? '0 0 0 1px var(--vscode-focusBorder)' : 'none'
+                }}
+            >
+                {/* Label - Before content, using ::before pseudo or separate span */}
                 <span
-                    className={`
-                        inline-flex flex-row items-stretch
-                        border border-[#4c4c4c] rounded-[3px] bg-[#2d2d2d]
-                        ${selected ? 'ring-1 ring-[var(--vscode-focusBorder)]' : ''}
-                    `}
+                    contentEditable={false}
+                    suppressContentEditableWarning
+                    onClick={handleClick}
+                    className="shrink-0 bg-[#3c3c3c] text-[#9cdcfe] text-[10px] font-mono px-1 py-0.5 cursor-pointer hover:bg-[#505050] border-r border-[#4c4c4c] select-none"
+                    style={{ userSelect: 'none', pointerEvents: 'auto' }}
+                    title="Click to configure Byte Width"
                 >
-                    {/* Header/Label - Clickable for Config */}
-                    <span
-                        contentEditable={false}
-                        onClick={handleClick}
-                        className="
-                            bg-[#3c3c3c] text-[#cccccc] text-[10px] font-mono
-                            px-1 flex items-center justify-center cursor-pointer select-none
-                            hover:bg-[#505050] border-r border-[#4c4c4c]
-                        "
-                        title="Click to configure Byte Width"
-                    >
-                        HEX:{byteWidth}
-                    </span>
-
-                    {/* Content Area */}
-                    <span className="px-1 text-[var(--st-input-text)]">
-                        <NodeViewContent as="span" />
-                    </span>
+                    {byteWidth}B
                 </span>
+
+                {/* Content Area - MUST be direct child with no contentEditable={false} wrapper */}
+                <NodeViewContent
+                    as="span"
+                    className="px-1 min-w-[40px] font-mono text-[13px] outline-none"
+                    style={{
+                        color: 'var(--st-input-text, #d4d4d4)',
+                        minHeight: '1.2em',
+                        display: 'inline-block'
+                    }}
+                />
             </NodeViewWrapper>
         );
     }
