@@ -20,7 +20,6 @@ export const GraphLayout = {
     COLOR_PAIR: '#c586c0',
     COLOR_BUS: '#dcdcaa', // Beige/Yellow for Shared/Bus
     COLOR_BG: '#2b2b2b',
-    COLOR_BG: '#2b2b2b',
     COLOR_BORDER: '#1e1e1e',
     COLOR_BORDER_SELECTED: '#007fd4', // VSCode Focus Border
 

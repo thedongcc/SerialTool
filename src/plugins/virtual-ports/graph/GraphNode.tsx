@@ -46,7 +46,6 @@ export const GraphNode = ({ id, type, portPath, x, y, scale = 1, isSelected, onS
     return (
         <div
             ref={setNodeRef}
-            style={style}
             {...attributes}
             {...listeners}
             className={`absolute flex flex-col rounded-[6px] shadow-xl cursor-grab active:cursor-grabbing select-none text-[11px]

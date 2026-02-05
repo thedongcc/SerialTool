@@ -1,9 +1,9 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.thedong.serialtool",
   "asar": true,
-  "productName": "YourAppName",
+  "productName": "SerialTool",
   "directories": {
     "output": "release/${version}"
   },
@@ -29,13 +29,22 @@
         ]
       }
     ],
-    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+    "icon": "resources/icons/win/icon.ico",
+    "sign": null
   },
   "nsis": {
     "oneClick": false,
-    "perMachine": false,
+    "allowElevation": true,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
+    "createDesktopShortcut": "always",
+    "createStartMenuShortcut": true,
+    "shortcutName": "SerialTool",
+    "perMachine": false,
+    "runAfterFinish": false,
+    "deleteAppDataOnUninstall": false,
+    "displayLanguageSelector": false,
+    "guid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
   },
   "linux": {
     "target": [

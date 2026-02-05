@@ -362,7 +362,6 @@ const LayoutRenderer = ({ node, activeGroupId, sessions, sessionManager, layoutA
             sessionManager={sessionManager}
             layoutActions={layoutActions}
             onShowSettings={onShowSettings}
-            onShowSettings={onShowSettings}
             activeDragId={activeDragId}
             dropIndicator={dropIndicator}
         />

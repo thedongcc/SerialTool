@@ -725,8 +725,6 @@ export const useSessionManager = () => {
         listPorts,
         saveSession,
         deleteSession,
-        saveSession,
-        deleteSession,
         openSavedSession,
         reorderSessions: useCallback(async (newOrder: SessionConfig[]) => {
             setSavedSessions(newOrder);

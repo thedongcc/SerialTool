@@ -535,23 +535,81 @@ function createWindow() {
 
 
   // ... existing child spawn code ...
-});
+
+  // --- TCP Service Integration ---
+  // We'll initialize it inside createWindow to ensure fresh webContents
+  // But we need to avoid re-adding IPC handlers.
+
+  if (VITE_DEV_SERVER_URL) {
+    win.loadURL(VITE_DEV_SERVER_URL)
+  } else {
+    win.loadFile(path.join(RENDERER_DIST, 'index.html'))
+  }
+
+  // Initialize TCP Service with this window
+  // Note: TcpService.ts needs to be compiled to JS if using TS.
+  // Since this is electron/main.ts (TS), TcpService.ts (TS) should be fine if built together.
+  // But 'require' might expect .js or .ts depending on setup.
+  // Assuming tsc/vite handles it.
+  tcpService = new TcpService(win.webContents);
+}
 
 // --- TCP Service Integration ---
-const { TcpService } = require('./TcpService');
-// We need to initialize this after 'win' is created.
-// But 'createWindow' is called multiple times?
-// Actually, 'createWindow' creates 'win'.
-// We can attach the service to the window or keep a global one if single instance.
-// For simplicity, let's look at where 'win' is defined.
-// It's a let binding at top level.
+// 内联 TcpService 类定义以避免打包时的模块解析问题
+class TcpService {
+  private servers: Map<number, any> = new Map();
+  private webContents: any;
 
-// We'll initialize it inside createWindow to ensure fresh webContents
-// But we need to avoid re-adding IPC handlers.
+  constructor(webContents: any) {
+    this.webContents = webContents;
+  }
 
-// Refactoring strategy:
-// IPC handlers usually static.
-// But the Service needs the webContents instance.
+  startServer(port: number) {
+    const net = require('net');
+    if (this.servers.has(port)) {
+      return { success: false, error: 'Server already running' };
+    }
+
+    const server = net.createServer((socket: any) => {
+      socket.on('data', (data: Buffer) => {
+        this.webContents.send('tcp:data', { port, data });
+      });
+      socket.on('error', (err: Error) => {
+        this.webContents.send('tcp:error', { port, error: err.message });
+      });
+      socket.on('close', () => {
+        this.webContents.send('tcp:client-disconnected', { port });
+      });
+    });
+
+    server.listen(port, () => {
+      this.servers.set(port, server);
+      this.webContents.send('tcp:server-started', { port });
+    });
+
+    server.on('error', (err: any) => {
+      this.webContents.send('tcp:error', { port, error: err.message });
+    });
+
+    return { success: true };
+  }
+
+  stopServer(port: number) {
+    const server = this.servers.get(port);
+    if (server) {
+      server.close();
+      this.servers.delete(port);
+      this.webContents.send('tcp:server-stopped', { port });
+      return true;
+    }
+    return false;
+  }
+
+  write(port: number, data: any) {
+    // Implementation for writing to TCP clients
+    // This would need to track connected clients per server
+  }
+}
 
 // Let's create a global reference
 let tcpService: any = null;
@@ -570,21 +628,6 @@ ipcMain.handle('tcp:write', async (_event, { port, data }) => {
   if (tcpService) tcpService.write(port, data);
   return true;
 });
-
-if (VITE_DEV_SERVER_URL) {
-  win.loadURL(VITE_DEV_SERVER_URL)
-} else {
-  win.loadFile(path.join(RENDERER_DIST, 'index.html'))
-}
-
-// Initialize TCP Service with this window
-// Note: TcpService.ts needs to be compiled to JS if using TS.
-// Since this is electron/main.ts (TS), TcpService.ts (TS) should be fine if built together.
-// But 'require' might expect .js or .ts depending on setup.
-// Assuming tsc/vite handles it.
-tcpService = new TcpService(win.webContents);
-
-}
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

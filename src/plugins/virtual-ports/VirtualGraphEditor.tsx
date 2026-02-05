@@ -311,8 +311,6 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
         >
             {/* Grid Background */}
             <div className="absolute inset-0 pointer-events-none opacity-20"

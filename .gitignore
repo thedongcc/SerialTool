@@ -9,6 +9,13 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-electron
+release
+
+# Certificate files
+*.pfx
+.env
+certificate.*
 dist-ssr
 *.local
 
