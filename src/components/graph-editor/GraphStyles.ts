@@ -22,6 +22,7 @@ export const GraphLayout = {
     COLOR_BG: '#2b2b2b',
     COLOR_BORDER: '#1e1e1e',
     COLOR_BORDER_SELECTED: '#007fd4', // VSCode Focus Border
+    COLOR_TEXT_MAIN: '#cccccc',
 
     // Calculation Helpers
     PORT_Y_OFFSET: 54,

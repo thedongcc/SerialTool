@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Token, CRCConfig, FlagConfig, HexConfig } from '../../types/token';
-import { X, Check } from 'lucide-react';
+import { X, Check, ChevronDown } from 'lucide-react';
 
 interface TokenConfigPopoverProps {
     token: Token;
@@ -97,17 +97,27 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
             return (
                 <div className="flex flex-col gap-3">
                     <div className="flex flex-col gap-1">
-                        <label className="text-[11px] text-[#969696]">Algorithm</label>
-                        <select
-                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
-                            value={crcConfig.algorithm}
-                            onChange={e => setConfig({ ...crcConfig, algorithm: e.target.value as any })}
-                            onKeyDown={handleKeyDown}
-                        >
-                            <option value="modbus-crc16">Modbus CRC16 (LE)</option>
-                            <option value="ccitt-crc16">CCITT CRC16 (BE)</option>
-                            <option value="crc32">CRC32</option>
-                        </select>
+                        <label className="text-[11px] text-[#969696] mb-1">Algorithm</label>
+                        <div className="relative">
+                            <select
+                                className="w-full bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1.5 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)] appearance-none pr-8"
+                                value={crcConfig.algorithm}
+                                onChange={e => setConfig({ ...crcConfig, algorithm: e.target.value as any })}
+                                onKeyDown={handleKeyDown}
+                            >
+                                <option value="modbus-crc16">Modbus CRC16 (LE)</option>
+                                <option value="ccitt-crc16">CCITT CRC16 (BE)</option>
+                                <option value="crc32">CRC32</option>
+                            </select>
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#969696]">
+                                <ChevronDown size={12} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 my-1 text-[10px] font-bold text-[#666] whitespace-nowrap">
+                        <span>Range Settings</span>
+                        <div className="h-[1px] bg-[#3c3c3c] flex-1 mt-0.5" />
                     </div>
 
                     <div className="flex gap-2">
@@ -123,17 +133,22 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                         </div>
                         <div className="flex flex-col gap-1 flex-1">
                             <label className="text-[11px] text-[#969696]">End</label>
-                            <select
-                                className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
-                                value={crcConfig.endIndex ?? 0}
-                                onChange={e => setConfig({ ...crcConfig, endIndex: parseInt(e.target.value) })}
-                                onKeyDown={handleKeyDown}
-                            >
-                                <option value="0">末尾 (End)</option>
-                                <option value="-1">-1</option>
-                                <option value="-2">-2</option>
-                                <option value="-3">-3</option>
-                            </select>
+                            <div className="relative">
+                                <select
+                                    className="w-full bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1.5 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)] appearance-none pr-8"
+                                    value={crcConfig.endIndex ?? 0}
+                                    onChange={e => setConfig({ ...crcConfig, endIndex: parseInt(e.target.value) })}
+                                    onKeyDown={handleKeyDown}
+                                >
+                                    <option value="0">末尾 (End)</option>
+                                    <option value="-1">-1</option>
+                                    <option value="-2">-2</option>
+                                    <option value="-3">-3</option>
+                                </select>
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#969696]">
+                                    <ChevronDown size={12} />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -145,28 +160,38 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
             return (
                 <div className="flex flex-col gap-3">
                     <div className="flex flex-col gap-1">
-                        <label className="text-[11px] text-[#969696]">格式</label>
-                        <select
-                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
-                            value={tsConfig.format || 'seconds'}
-                            onChange={e => setConfig({ ...tsConfig, format: e.target.value })}
-                            onKeyDown={handleKeyDown}
-                        >
-                            <option value="seconds">秒 (4 字节)</option>
-                            <option value="milliseconds">毫秒 (8 字节)</option>
-                        </select>
+                        <label className="text-[11px] text-[#cccccc] mb-1">Format</label>
+                        <div className="relative">
+                            <select
+                                className="w-full bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1.5 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)] appearance-none pr-8"
+                                value={tsConfig.format || 'seconds'}
+                                onChange={e => setConfig({ ...tsConfig, format: e.target.value })}
+                                onKeyDown={handleKeyDown}
+                            >
+                                <option value="seconds">Seconds (4-byte)</option>
+                                <option value="milliseconds">Milliseconds (8-byte)</option>
+                            </select>
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#969696]">
+                                <ChevronDown size={12} />
+                            </div>
+                        </div>
                     </div>
                     <div className="flex flex-col gap-1">
-                        <label className="text-[11px] text-[#969696]">字节序</label>
-                        <select
-                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)]"
-                            value={tsConfig.byteOrder || 'big'}
-                            onChange={e => setConfig({ ...tsConfig, byteOrder: e.target.value })}
-                            onKeyDown={handleKeyDown}
-                        >
-                            <option value="big">Big Endian (大端)</option>
-                            <option value="little">Little Endian (小端)</option>
-                        </select>
+                        <label className="text-[11px] text-[#cccccc] mb-1">Byte Order</label>
+                        <div className="relative">
+                            <select
+                                className="w-full bg-[#3c3c3c] border border-[#3c3c3c] text-[12px] p-1.5 outline-none rounded-sm focus:border-[var(--vscode-focusBorder)] appearance-none pr-8"
+                                value={tsConfig.byteOrder || 'big'}
+                                onChange={e => setConfig({ ...tsConfig, byteOrder: e.target.value })}
+                                onKeyDown={handleKeyDown}
+                            >
+                                <option value="big">Big Endian</option>
+                                <option value="little">Little Endian</option>
+                            </select>
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#969696]">
+                                <ChevronDown size={12} />
+                            </div>
+                        </div>
                     </div>
                 </div>
             );
@@ -268,7 +293,7 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
     return (
         <div
             ref={popoverRef}
-            className="fixed z-50 bg-[#252526] border border-[var(--vscode-widget-border)] shadow-xl rounded-md flex flex-col text-[var(--vscode-fg)]"
+            className="fixed z-50 bg-[#252526] border border-[var(--vscode-widget-border)] shadow-xl rounded-md flex flex-col text-[var(--vscode-fg)] select-none"
             style={{
                 left: pos.x,
                 top: pos.y,
@@ -276,6 +301,18 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                 height: size.height
             }}
         >
+            <style>
+                {`
+                    input[type=number]::-webkit-inner-spin-button,
+                    input[type=number]::-webkit-outer-spin-button {
+                        -webkit-appearance: none;
+                        margin: 0;
+                    }
+                    input[type=number] {
+                        -moz-appearance: textfield;
+                    }
+                `}
+            </style>
             <div
                 className="flex items-center justify-between px-3 py-2 border-b border-[var(--vscode-border)] bg-[#2d2d2d] cursor-move select-none"
                 onMouseDown={handleMouseDownHeader}
@@ -294,7 +331,7 @@ export const TokenConfigPopover = ({ token, onUpdate, onDelete, onClose, positio
                         className="px-2 py-1 text-[11px] text-[#f48771] hover:bg-[#4b1818] rounded"
                         onClick={() => { onDelete(token.id); onClose(); }}
                     >
-                        Remove
+                        Delete
                     </button>
                     <button
                         className="px-3 py-1 bg-[var(--vscode-button-bg)] text-white text-[12px] rounded hover:bg-[var(--vscode-button-hover-bg)] flex items-center gap-1"

@@ -4,7 +4,7 @@ import { X, LayoutTemplate, Plus, Columns } from 'lucide-react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { SerialMonitor } from '../serial/SerialMonitor';
 import { MqttMonitor } from '../mqtt/MqttMonitor';
-import { VirtualGraphEditor } from '../../plugins/virtual-ports/VirtualGraphEditor';
+import { GraphEditor } from '../graph-editor/GraphEditor';
 import { SettingsEditor } from '../settings/SettingsEditor';
 import { useSessionManager } from '../../hooks/useSessionManager';
 import { useEditorLayout, LayoutNode, LeafNode, findNode } from '../../hooks/useEditorLayout';
@@ -275,7 +275,7 @@ const GroupPanel = ({ node, isActive, sessions, sessionManager, layoutActions, o
                             return <div className="absolute inset-0"><SettingsEditor /></div>;
                         }
                         if (session.config.type === 'graph') {
-                            return <div className="absolute inset-0"><VirtualGraphEditor sessionId={session.id} /></div>;
+                            return <div className="absolute inset-0"><GraphEditor sessionId={session.id} /></div>;
                         }
                         if (session.config.type === 'mqtt') {
                             return <MqttMonitor

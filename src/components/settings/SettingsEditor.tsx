@@ -23,14 +23,14 @@ const ColorInput = ({ label, value, onChange }: { label: string, value: string, 
                 {/* Visual Swatch / Trigger */}
                 <div
                     className="w-5 h-5 rounded border border-[#3c3c3c] cursor-pointer shadow-sm relative overflow-hidden flex-shrink-0"
-                    style={{ backgroundColor: value }}
+                    style={{ backgroundColor: value || '#000000' }}
                     onClick={() => inputRef.current?.click()}
                     title="Click to pick color"
                 >
                     <input
                         ref={inputRef}
                         type="color"
-                        value={value.length === 7 ? value : '#000000'}
+                        value={(value && value.length === 7) ? value : '#000000'}
                         onChange={e => onChange(e.target.value)}
                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full p-0 border-none"
                     />

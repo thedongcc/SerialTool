@@ -19,6 +19,8 @@ interface SerialInputProps {
     initialMode?: 'text' | 'hex';
     initialLineEnding?: '' | '\n' | '\r' | '\r\n';
     isConnected?: boolean;
+    fontSize?: number;
+    fontFamily?: string;
     onConnectRequest?: () => void;
     onStateChange?: (state: { content: string, html: string, tokens: Record<string, Token>, mode: 'text' | 'hex', lineEnding: '' | '\n' | '\r' | '\r\n' }) => void;
 }
@@ -31,6 +33,8 @@ export const SerialInput = ({
     initialMode = 'hex',
     initialLineEnding = '\r\n',
     isConnected = false,
+    fontSize = 13,
+    fontFamily = 'var(--font-mono)',
     onConnectRequest,
     onStateChange
 }: SerialInputProps) => {
@@ -54,11 +58,11 @@ export const SerialInput = ({
     // Memoize editorProps
     const editorProps = useMemo(() => ({
         attributes: {
-            class: 'outline-none text-[var(--st-input-text)] text-[13px] font-[family-name:var(--font-mono)] whitespace-pre-wrap break-all flex-1 min-h-[40px] overflow-y-auto custom-scrollbar p-2 leading-[20px] [&_p]:m-0 tracking-[0px]',
+            class: 'outline-none text-[var(--st-input-text)] whitespace-pre-wrap break-all flex-1 min-h-[40px] overflow-y-auto custom-scrollbar p-2 leading-relaxed [&_p]:m-0 tracking-[0px]',
             spellcheck: 'false',
-            style: 'font-variant-ligatures: none;'
+            style: `font-size: ${fontSize}px; font-family: ${fontFamily === 'mono' ? 'var(--font-mono)' : fontFamily}; font-variant-ligatures: none;`
         },
-    }), []);
+    }), [fontSize, fontFamily]);
 
     // TipTap Editor
     // console.log('SerialInput: Initializing editor with content:', { initialHTML, initialContent });
@@ -187,6 +191,18 @@ export const SerialInput = ({
 
     return (
         <div className="border-t border-[var(--vscode-border)] bg-[#252526] p-2 flex flex-col gap-2 shrink-0 select-none">
+            <style>
+                {`
+                    input[type=number]::-webkit-inner-spin-button,
+                    input[type=number]::-webkit-outer-spin-button {
+                        -webkit-appearance: none;
+                        margin: 0;
+                    }
+                    input[type=number] {
+                        -moz-appearance: textfield;
+                    }
+                `}
+            </style>
             {/* Toolbar */}
             <div className="flex items-center gap-2 h-6">
                 <div className="flex items-center gap-[1px] bg-[#1e1e1e] border border-[#3c3c3c] rounded-sm overflow-hidden p-[2px]">

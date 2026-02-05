@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { SessionState, SessionConfig } from '../../types/session';
 import { SerialInput } from './SerialInput';
-import { Settings, Eye, EyeOff, X, Trash2, Download, ArrowDown } from 'lucide-react';
+import { Settings, Eye, EyeOff, X, Trash2, Download, ArrowDownToLine, Menu, ChevronDown } from 'lucide-react';
 import { CRCConfig } from '../../utils/crc';
 import { useSettings } from '../../context/SettingsContext';
 
@@ -47,6 +47,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
     const [autoScroll, setAutoScroll] = useState(uiState.autoScroll !== undefined ? uiState.autoScroll : true);
     const [showSettingsPanel, setShowSettingsPanel] = useState(false);
     const [showCRCPanel, setShowCRCPanel] = useState(false);
+    const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
     // CRC is in session.config.rxCRC.enabled
     const crcEnabled = (config as any).rxCRC?.enabled || false;
@@ -240,9 +241,21 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
 
     return (
         <div
-            className="absolute inset-0 flex flex-col bg-[var(--st-rx-bg)] bg-cover bg-center"
+            className="absolute inset-0 flex flex-col bg-[var(--st-rx-bg)] bg-cover bg-center select-none"
             style={{ backgroundImage: 'var(--st-rx-bg-img)' }}
         >
+            <style>
+                {`
+                    input[type=number]::-webkit-inner-spin-button,
+                    input[type=number]::-webkit-outer-spin-button {
+                        -webkit-appearance: none;
+                        margin: 0;
+                    }
+                    input[type=number] {
+                        -moz-appearance: textfield;
+                    }
+                `}
+            </style>
             {/* Enhanced Toolbar */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#2b2b2b] bg-[#252526] shrink-0">
                 <div className="text-sm font-medium text-[#cccccc] flex items-center gap-2">
@@ -259,220 +272,273 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                 </div>
 
                 <div className="flex items-center gap-4">
-                    {/* Hex/Text Display Mode */}
-                    <div className="flex items-center gap-1 bg-[#1e1e1e] p-0.5 rounded border border-[#3c3c3c]">
-                        <button
-                            className={`px-2 py-0.5 text-[10px] rounded ${viewMode === 'text' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:text-[#cccccc]'}`}
-                            onClick={() => { setViewMode('text'); saveUIState({ viewMode: 'text' }); }}
-                        >
-                            Text
-                        </button>
-                        <button
-                            className={`px-2 py-0.5 text-[10px] rounded ${viewMode === 'hex' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:text-[#cccccc]'}`}
-                            onClick={() => { setViewMode('hex'); saveUIState({ viewMode: 'hex' }); }}
-                        >
-                            Hex
-                        </button>
+                    {/* Stats Display - Refined JetBrains Style */}
+                    <div className="flex items-center bg-[#1e1e1e]/80 border border-[#3c3c3c] rounded-sm divide-x divide-[#3c3c3c] overflow-hidden shadow-inner">
+                        <div className="flex items-center gap-1.5 px-3 py-1 hover:bg-[#2a2d2e] transition-colors group">
+                            <span className="text-[11px] font-semibold text-[#888888] group-hover:text-[#aaaaaa] transition-colors font-mono">T:</span>
+                            <span className="text-[11px] font-semibold text-[#cccccc] font-mono tabular-nums leading-none">{txBytes.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-3 py-1 hover:bg-[#2a2d2e] transition-colors group">
+                            <span className="text-[11px] font-semibold text-[#888888] group-hover:text-[#aaaaaa] transition-colors font-mono">R:</span>
+                            <span className="text-[11px] font-semibold text-[#cccccc] font-mono tabular-nums leading-none">{rxBytes.toLocaleString()}</span>
+                        </div>
                     </div>
-
-                    {/* CRC Toggle with Config */}
-                    <div className="relative">
-                        <div className="flex items-center gap-1.5">
-                            <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[#969696] hover:text-[#cccccc]">
-                                <input
-                                    type="checkbox"
-                                    checked={crcEnabled}
-                                    onChange={toggleCRC}
-                                    className="w-3 h-3"
-                                />
-                                CRC Check
-                            </label>
-                            <Settings
-                                size={12}
-                                className="cursor-pointer text-[#969696] hover:text-white"
-                                onClick={(e) => { e.stopPropagation(); setShowCRCPanel(!showCRCPanel); }}
-                            />
+                    {/* Mode Toggle & Options Group */}
+                    <div className="flex items-center gap-1.5">
+                        {/* Hex/Text Display Mode */}
+                        <div className="flex items-center gap-1 bg-[#1e1e1e] p-0.5 rounded border border-[#3c3c3c] h-[26px]">
+                            <button
+                                className={`px-2.5 h-full text-[10px] font-medium leading-none rounded-[2px] ${viewMode === 'text' ? 'bg-[#007acc] text-white shadow-sm' : 'text-[#969696] hover:text-[#cccccc]'}`}
+                                onClick={() => { setViewMode('text'); saveUIState({ viewMode: 'text' }); }}
+                            >
+                                TXT
+                            </button>
+                            <button
+                                className={`px-2.5 h-full text-[10px] font-medium leading-none rounded-[2px] ${viewMode === 'hex' ? 'bg-[#007acc] text-white shadow-sm' : 'text-[#969696] hover:text-[#cccccc]'}`}
+                                onClick={() => { setViewMode('hex'); saveUIState({ viewMode: 'hex' }); }}
+                            >
+                                HEX
+                            </button>
                         </div>
 
-                        {showCRCPanel && (
-                            <>
-                                <div className="fixed inset-0 z-40" onClick={() => setShowCRCPanel(false)} />
-                                <div className="absolute left-0 top-full mt-1 bg-[#252526] border border-[#3c3c3c] rounded-sm shadow-lg p-3 z-50 min-w-[220px]">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="text-[11px] text-[#cccccc] font-medium">RX CRC Settings</div>
-                                        <X size={14} className="cursor-pointer text-[#969696] hover:text-white" onClick={() => setShowCRCPanel(false)} />
+
+                        {/* Options Menu Button and Panel */}
+                        <div className="relative">
+                            <button
+                                className={`h-8 px-2 hover:bg-[#3c3c3c] rounded text-[#969696] hover:text-[#cccccc] transition-colors flex items-center gap-1.5 border border-transparent ${showOptionsMenu ? 'bg-[#3c3c3c] text-white' : ''}`}
+                                onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                                title="Options"
+                            >
+                                <Menu size={16} />
+                                <span className="text-[11px] font-medium">Options</span>
+                            </button>
+                            {showOptionsMenu && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setShowOptionsMenu(false)} />
+                                    <div className="absolute right-0 top-full mt-1 bg-[#2b2d2e] border border-[#3c3c3c] rounded-[3px] shadow-2xl p-3 z-50 min-w-[260px]">
+                                        <div className="flex items-center justify-between mb-4 pb-1 border-b border-[#3c3c3c]">
+                                            <div className="text-[12px] text-[#cccccc] font-bold">Log Settings</div>
+                                            <X size={14} className="cursor-pointer text-[#969696] hover:text-white" onClick={() => setShowOptionsMenu(false)} />
+                                        </div>
+
+                                        {/* Filter Section */}
+                                        <div className="mb-5 px-1">
+                                            <div className="flex items-center gap-2 mb-2 text-[11px] font-bold text-[#bbbbbb] whitespace-nowrap">
+                                                <span>Display Filter</span>
+                                                <div className="h-[1px] bg-[#3c3c3c] flex-1 mt-0.5" />
+                                            </div>
+                                            <div className="flex items-center gap-1 bg-[#1e1e1e] p-0.5 rounded border border-[#3c3c3c] h-7">
+                                                {(['all', 'rx', 'tx'] as const).map(mode => (
+                                                    <button
+                                                        key={mode}
+                                                        className={`flex-1 h-full text-[10px] font-medium leading-none rounded-[2px] uppercase ${filterMode === mode ? 'bg-[#007acc] text-white shadow-sm' : 'text-[#969696] hover:text-[#cccccc]'}`}
+                                                        onClick={() => { setFilterMode(mode); saveUIState({ filterMode: mode }); }}
+                                                    >
+                                                        {mode}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Encoding Section */}
+                                        <div className="mb-5 px-1 pt-2">
+                                            <div className="flex items-center gap-2 mb-2 text-[11px] font-bold text-[#bbbbbb] whitespace-nowrap">
+                                                <span>Encoding</span>
+                                                <div className="h-[1px] bg-[#3c3c3c] flex-1 mt-0.5" />
+                                            </div>
+                                            <div className="relative">
+                                                <select
+                                                    className="w-full bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-[2px] outline-none px-2 py-1.5 hover:bg-[#454545] transition-colors appearance-none pr-8"
+                                                    value={encoding}
+                                                    onChange={(e) => { setEncoding(e.target.value as any); saveUIState({ encoding: e.target.value as any }); }}
+                                                >
+                                                    <option value="utf-8">UTF-8</option>
+                                                    <option value="gbk">GBK</option>
+                                                    <option value="ascii">ASCII</option>
+                                                </select>
+                                                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#969696]">
+                                                    <ChevronDown size={12} />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Features Section */}
+                                        <div className="mb-5 px-1 pt-2">
+                                            <div className="flex items-center gap-2 mb-3 text-[11px] font-bold text-[#bbbbbb] whitespace-nowrap">
+                                                <span>Features</span>
+                                                <div className="h-[1px] bg-[#3c3c3c] flex-1 mt-0.5" />
+                                            </div>
+                                            <div className="space-y-3">
+                                                {/* Timestamp */}
+                                                <label className="flex items-center justify-between cursor-pointer group">
+                                                    <span className="text-[11px] text-[#cccccc] group-hover:text-[#ffffff] transition-colors">Timestamp</span>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={showTimestamp}
+                                                        onChange={(e) => { setShowTimestamp(e.target.checked); saveUIState({ showTimestamp: e.target.checked }); }}
+                                                        className="w-3.5 h-3.5 rounded border-[#3c3c3c] bg-[#1e1e1e] text-[#007acc] focus:ring-0 focus:ring-offset-0"
+                                                    />
+                                                </label>
+
+                                                {/* CRC */}
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={crcEnabled}
+                                                                onChange={toggleCRC}
+                                                                className="w-3.5 h-3.5 rounded border-[#3c3c3c] bg-[#1e1e1e] text-[#007acc] focus:ring-0 focus:ring-offset-0"
+                                                            />
+                                                            <span className="text-[11px] text-[#cccccc] group-hover:text-white transition-colors">CRC Check</span>
+                                                        </label>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setShowCRCPanel(!showCRCPanel); }}
+                                                            className={`p-1 rounded hover:bg-[#3c3c3c] text-[#969696] hover:text-white transition-colors ${showCRCPanel ? 'bg-[#3c3c3c] text-white' : ''}`}
+                                                            title="CRC Configuration"
+                                                        >
+                                                            <Settings size={12} />
+                                                        </button>
+                                                    </div>
+
+                                                    {showCRCPanel && (
+                                                        <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded p-2 space-y-2 mt-1">
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-[10px] text-[#cccccc]">Algorithm:</span>
+                                                                <select
+                                                                    className="bg-[#3c3c3c] border border-[#3c3c3c] text-[10px] text-[#cccccc] rounded-sm outline-none px-1 py-0.5"
+                                                                    value={rxCRC.algorithm}
+                                                                    onChange={(e) => updateRxCRC({ algorithm: e.target.value as any })}
+                                                                >
+                                                                    <option value="modbus-crc16">Modbus CRC16</option>
+                                                                    <option value="ccitt-crc16">CCITT CRC16</option>
+                                                                    <option value="crc32">CRC32</option>
+                                                                    <option value="none">None</option>
+                                                                </select>
+                                                            </div>
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-[10px] text-[#cccccc]">Start Offset:</span>
+                                                                <input
+                                                                    type="number"
+                                                                    className="bg-[#3c3c3c] border border-[#3c3c3c] text-[10px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5 w-24"
+                                                                    value={rxCRC.startIndex}
+                                                                    onChange={(e) => updateRxCRC({ startIndex: parseInt(e.target.value) || 0 })}
+                                                                />
+                                                            </div>
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-[10px] text-[#cccccc]">End Position:</span>
+                                                                <div className="relative">
+                                                                    <select
+                                                                        className="bg-[#3c3c3c] border border-[#3c3c3c] text-[10px] text-[#cccccc] rounded-sm outline-none px-1 py-0.5 w-24 appearance-none pr-5 hover:bg-[#454545] transition-colors"
+                                                                        value={rxCRC.endIndex}
+                                                                        onChange={(e) => updateRxCRC({ endIndex: parseInt(e.target.value) })}
+                                                                    >
+                                                                        <option value="0">End</option>
+                                                                        <option value="-1">-1</option>
+                                                                        <option value="-2">-2</option>
+                                                                        <option value="-3">-3</option>
+                                                                    </select>
+                                                                    <div className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-[#969696]">
+                                                                        <ChevronDown size={10} />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Display Settings Section */}
+                                        <div className="mb-6 px-1 pt-2">
+                                            <div className="flex items-center gap-2 mb-3 text-[11px] font-bold text-[#bbbbbb] whitespace-nowrap">
+                                                <span>UI Settings</span>
+                                                <div className="h-[1px] bg-[#3c3c3c] flex-1 mt-0.5" />
+                                            </div>
+                                            <div className="space-y-4">
+                                                {/* Font Size */}
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[11px] text-[#cccccc]">Font Size:</span>
+                                                    <div className="relative">
+                                                        <select
+                                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-[2px] outline-none px-2 py-1 w-24 appearance-none hover:bg-[#454545] transition-colors pr-6"
+                                                            value={fontSize}
+                                                            onChange={(e) => { const val = Number(e.target.value); setFontSize(val); saveUIState({ fontSize: val }); }}
+                                                        >
+                                                            {[8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20].map(size => (
+                                                                <option key={size} value={size}>{size}px</option>
+                                                            ))}
+                                                        </select>
+                                                        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-[#969696]">
+                                                            <ChevronDown size={11} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Font Family */}
+                                                <div className="flex flex-col gap-2">
+                                                    <span className="text-[11px] text-[#cccccc]">Font Family:</span>
+                                                    <div className="relative text-wrap">
+                                                        <select
+                                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-[2px] outline-none px-2 py-1.5 w-full appearance-none hover:bg-[#454545] transition-colors pr-8"
+                                                            value={fontFamily}
+                                                            onChange={(e) => { setFontFamily(e.target.value as any); saveUIState({ fontFamily: e.target.value as any }); }}
+                                                        >
+                                                            <option value="mono">Monospace (Default)</option>
+                                                            <option value="consolas">Consolas</option>
+                                                            <option value="JetBrains Mono">JetBrains Mono</option>
+                                                            <option value="Microsoft YaHei UI">Microsoft YaHei UI</option>
+                                                            <option value="Segoe UI">Segoe UI</option>
+                                                            <option value="Inter">Inter</option>
+                                                            <option value="Courier New">Courier New</option>
+                                                        </select>
+                                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#969696]">
+                                                            <ChevronDown size={12} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Chunk Timeout */}
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[11px] text-[#cccccc]">Packet Timeout:</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="number"
+                                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-[2px] outline-none px-2 py-1 w-24 focus:border-[#007acc] transition-colors"
+                                                            value={uiState.chunkTimeout || 0}
+                                                            onChange={(e) => {
+                                                                const val = parseInt(e.target.value);
+                                                                const newTimeout = isNaN(val) ? 0 : Math.max(0, val);
+                                                                if (onUpdateConfig) {
+                                                                    const currentUIState = (config as any).uiState || {};
+                                                                    onUpdateConfig({ uiState: { ...currentUIState, chunkTimeout: newTimeout } } as any);
+                                                                }
+                                                            }}
+                                                            placeholder="0"
+                                                        />
+                                                        <span className="text-[10px] text-[#666666]">ms</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Action Items */}
+                                        <div className="pt-2 border-t border-[#3c3c3c]">
+                                            <button
+                                                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#007acc] hover:bg-[#0062a3] text-white text-[11px] rounded transition-colors"
+                                                onClick={() => {
+                                                    handleSaveLogs();
+                                                    setShowOptionsMenu(false);
+                                                }}
+                                            >
+                                                <Download size={14} />
+                                                <span>Export Log</span>
+                                            </button>
+                                        </div>
                                     </div>
-
-                                    {/* Algorithm */}
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-[10px] text-[#969696]">Algorithm:</span>
-                                        <select
-                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
-                                            value={rxCRC.algorithm}
-                                            onChange={(e) => updateRxCRC({ algorithm: e.target.value as any })}
-                                        >
-                                            <option value="modbus-crc16">Modbus CRC16</option>
-                                            <option value="ccitt-crc16">CCITT CRC16</option>
-                                            <option value="crc32">CRC32</option>
-                                            <option value="none">None</option>
-                                        </select>
-                                    </div>
-
-                                    {/* Start Index */}
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-[10px] text-[#969696]">Start:</span>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5 w-16"
-                                            value={rxCRC.startIndex}
-                                            onChange={(e) => updateRxCRC({ startIndex: parseInt(e.target.value) || 0 })}
-                                        />
-                                    </div>
-
-                                    {/* End Index */}
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[10px] text-[#969696]">End:</span>
-                                        <select
-                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5 w-20"
-                                            value={rxCRC.endIndex}
-                                            onChange={(e) => updateRxCRC({ endIndex: parseInt(e.target.value) })}
-                                        >
-                                            <option value="0">End (末尾)</option>
-                                            <option value="-1">-1</option>
-                                            <option value="-2">-2</option>
-                                            <option value="-3">-3</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </>
-                        )}
-
-
-                    </div>
-
-                    {/* Timestamp Toggle */}
-                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[#969696] hover:text-[#cccccc]">
-                        <input
-                            type="checkbox"
-                            checked={showTimestamp}
-                            onChange={(e) => { setShowTimestamp(e.target.checked); saveUIState({ showTimestamp: e.target.checked }); }}
-                            className="w-3 h-3"
-                        />
-                        Timestamp
-                    </label>
-
-                    {/* RX/TX Filter - Button Group */}
-                    <div className="flex items-center gap-1 bg-[#1e1e1e] p-0.5 rounded border border-[#3c3c3c]">
-                        <button
-                            className={`px-2 py-0.5 text-[10px] rounded ${filterMode === 'all' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:text-[#cccccc]'}`}
-                            onClick={() => { setFilterMode('all'); saveUIState({ filterMode: 'all' }); }}
-                        >
-                            All
-                        </button>
-                        <button
-                            className={`px-2 py-0.5 text-[10px] rounded ${filterMode === 'rx' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:text-[#cccccc]'}`}
-                            onClick={() => { setFilterMode('rx'); saveUIState({ filterMode: 'rx' }); }}
-                        >
-                            RX
-                        </button>
-                        <button
-                            className={`px-2 py-0.5 text-[10px] rounded ${filterMode === 'tx' ? 'bg-[#007acc] text-white' : 'text-[#969696] hover:text-[#cccccc]'}`}
-                            onClick={() => { setFilterMode('tx'); saveUIState({ filterMode: 'tx' }); }}
-                        >
-                            TX
-                        </button>
-                    </div>
-
-                    {/* Encoding */}
-                    <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-[#969696]">Encoding:</span>
-                        <select
-                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
-                            value={encoding}
-                            onChange={(e) => { setEncoding(e.target.value as any); saveUIState({ encoding: e.target.value as any }); }}
-                        >
-                            <option value="utf-8">UTF-8</option>
-                            <option value="gbk">GBK</option>
-                            <option value="ascii">ASCII</option>
-                        </select>
-                    </div>
-
-                    {/* Settings Popover Toggle */}
-                    <div className="relative">
-                        <button
-                            className="p-1 hover:bg-[#3c3c3c] rounded text-[#969696] hover:text-[#cccccc] transition-colors"
-                            onClick={() => setShowSettingsPanel(!showSettingsPanel)}
-                            title="Display Settings"
-                        >
-                            <Settings size={14} />
-                        </button>
-
-                        {showSettingsPanel && (
-                            <>
-                                <div className="fixed inset-0 z-40" onClick={() => setShowSettingsPanel(false)} />
-                                <div className="absolute right-0 top-full mt-1 bg-[#252526] border border-[#3c3c3c] rounded-sm shadow-lg p-3 z-50 min-w-[200px]">
-                                    <div className="text-[11px] text-[#cccccc] mb-2 font-medium">Display Settings</div>
-
-                                    {/* Font Size */}
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-[10px] text-[#969696]">Font Size:</span>
-                                        <select
-                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
-                                            value={fontSize}
-                                            onChange={(e) => { const val = Number(e.target.value); setFontSize(val); saveUIState({ fontSize: val }); }}
-                                        >
-                                            <option value={11}>11px</option>
-                                            <option value={12}>12px</option>
-                                            <option value={13}>13px</option>
-                                            <option value={14}>14px</option>
-                                            <option value={15}>15px</option>
-                                            <option value={16}>16px</option>
-                                        </select>
-                                    </div>
-
-                                    {/* Font Family */}
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-[10px] text-[#969696]">Font:</span>
-                                        <select
-                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5"
-                                            value={fontFamily}
-                                            onChange={(e) => { setFontFamily(e.target.value as any); saveUIState({ fontFamily: e.target.value as any }); }}
-                                        >
-                                            <option value="mono">Monospace</option>
-                                            <option value="consolas">Consolas</option>
-                                            <option value="courier">Courier</option>
-                                        </select>
-                                    </div>
-
-                                    {/* Chunk Timeout */}
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[10px] text-[#969696]" title="Merge logs if received within this time (ms)">Chunk Timeout:</span>
-                                        <input
-                                            type="number"
-                                            className="bg-[#3c3c3c] border border-[#3c3c3c] text-[11px] text-[#cccccc] rounded-sm outline-none px-1.5 py-0.5 w-16"
-                                            value={uiState.chunkTimeout || 0}
-                                            onChange={(e) => {
-                                                const val = parseInt(e.target.value);
-                                                const newTimeout = isNaN(val) ? 0 : Math.max(0, val);
-                                                // We need to update session config directly for this one as it affects logic
-                                                if (onUpdateConfig) {
-                                                    const currentUIState = (config as any).uiState || {};
-                                                    onUpdateConfig({ uiState: { ...currentUIState, chunkTimeout: newTimeout } } as any);
-                                                }
-                                            }}
-                                            placeholder="0"
-                                        />
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    {/* Statistics */}
-                    <div className="flex items-center gap-2 text-[10px] text-[#969696] border-l border-[#3c3c3c] pl-2">
-                        <span>TX: {txBytes}B</span>
-                        <span>RX: {rxBytes}B</span>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     {/* Action Buttons */}
@@ -490,14 +556,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                             }}
                             title={`Auto Scroll: ${autoScroll ? 'On' : 'Off'}`}
                         >
-                            <ArrowDown size={14} />
-                        </button>
-                        <button
-                            className="p-1 hover:bg-[#3c3c3c] rounded text-[#969696] hover:text-[#cccccc] transition-colors"
-                            onClick={handleSaveLogs}
-                            title="Save Logs"
-                        >
-                            <Download size={14} />
+                            <ArrowDownToLine size={14} />
                         </button>
                         <button
                             className="p-1 hover:bg-[#3c3c3c] rounded text-[#969696] hover:text-[#cccccc] transition-colors"
@@ -511,17 +570,29 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
             </div>
 
             {/* Log Area */}
-            <div className={`flex-1 overflow-auto p-4 ${fontFamilyClass}`} style={{ fontSize: `${fontSize}px` }} ref={scrollRef}>
+            <div
+                className="flex-1 overflow-auto p-4"
+                style={{
+                    fontSize: `${fontSize}px`,
+                    fontFamily: fontFamily === 'mono' ? 'var(--font-mono)' : `"${fontFamily}", sans-serif`,
+                    lineHeight: '1.6'
+                }}
+                ref={scrollRef}
+            >
                 {filteredLogs.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-[#666]">
                         <p>No data</p>
                     </div>
                 )}
                 {filteredLogs.map((log, index) => (
-                    <div key={index} className={`flex items-baseline gap-2.5 mb-0.5 hover:bg-[#2a2d2e] rounded px-1.5 py-0.5 group relative border-l-2 font-[family-name:var(--font-mono)] text-[13px] leading-5 ${log.crcStatus === 'error' ? 'bg-[#4b1818]/20 border-[#f48771]' : 'border-transparent'
-                        }`}>
+                    <div
+                        key={index}
+                        className={`flex items-baseline gap-2.5 mb-1 hover:bg-[#2a2d2e] rounded-sm px-1.5 py-0.5 group relative border-l-2 leading-relaxed ${log.crcStatus === 'error' ? 'bg-[#4b1818]/20 border-[#f48771]' : 'border-transparent'
+                            }`}
+                        style={{ fontSize: 'inherit', fontFamily: 'inherit' }}
+                    >
                         {showTimestamp && (
-                            <span className="text-[var(--st-timestamp)] shrink-0 opacity-70">
+                            <span className="text-[var(--st-timestamp)] shrink-0 font-mono opacity-90">
                                 [{formatTimestamp(log.timestamp, themeConfig.timestampFormat).trim()}]
                             </span>
                         )}
@@ -558,6 +629,8 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                 initialLineEnding={uiState.lineEnding || '\r\n'}
                 onStateChange={handleInputStateChange}
                 isConnected={isConnected}
+                fontSize={fontSize}
+                fontFamily={fontFamily}
                 onConnectRequest={async () => {
                     // Try to connect if a port is configured
                     if (config.connection.path && onConnectRequest) {

@@ -1,17 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { DndContext, useSensor, useSensors, PointerSensor, DragEndEvent } from '@dnd-kit/core';
-import { restrictToWindowEdges } from '@dnd-kit/modifiers';
-import { virtualPortService, GraphNode as IGraphNode, GraphEdge as IGraphEdge } from './VirtualPortService';
-import { GraphNode } from './graph/GraphNode';
-import { GraphCanvas } from './graph/GraphCanvas';
-import { GraphLayout } from './graph/GraphStyles';
-import { Plus, Trash2, Eraser, Layout, ZoomIn, ZoomOut, Link, Network } from 'lucide-react';
+import { graphService, GraphNode as IGraphNode, GraphEdge as IGraphEdge } from '../../services/GraphService';
+import { GraphNode } from './GraphNode';
+import { GraphCanvas } from './GraphCanvas';
+import { GraphLayout } from './GraphStyles';
+import { Plus, Trash2, Layout, ZoomIn, ZoomOut, Link, Network } from 'lucide-react';
 
-interface VirtualGraphEditorProps {
+interface GraphEditorProps {
     sessionId?: string;
 }
 
-export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
+export const GraphEditor = ({ sessionId }: GraphEditorProps) => {
     // Local state for UI responsiveness, synced with Service
     const [nodes, setNodes] = useState<IGraphNode[]>([]);
     const [edges, setEdges] = useState<IGraphEdge[]>([]);
@@ -22,7 +21,6 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
     const tempEdgeRef = useRef<{ sourceNode: string, type: 'source' | 'target' } | null>(null);
 
     // Temp edge for visual rendering
-    // Temp edge for visual rendering
     const [tempEdge, setTempEdge] = useState<{ sourceX: number, sourceY: number, targetX: number, targetY: number } | null>(null);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -32,16 +30,15 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
     );
 
-    // Initial Load & Sync using 'global' virtual port service for now
-    // In future, if sessionId implies separate graph, we'd load that specific graph.
+    // Initial Load & Sync using graphService
     useEffect(() => {
         const update = () => {
-            const g = virtualPortService.getGraph();
+            const g = graphService.getGraph();
             setNodes(g.nodes);
             setEdges(g.edges);
         };
         update();
-        const unsub = virtualPortService.onStateChange(update);
+        const unsub = graphService.onStateChange(update);
         return () => unsub();
     }, [sessionId]);
 
@@ -71,13 +68,13 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
                     const newEdges = edges.filter(e => e.sourceStr !== selectedNodeId && e.targetStr !== selectedNodeId);
                     setNodes(newNodes);
                     setEdges(newEdges);
-                    virtualPortService.updateGraph(newNodes, newEdges);
+                    graphService.updateGraph(newNodes, newEdges);
                     setSelectedNodeId(null);
                 }
                 if (selectedEdgeId) {
                     const newEdges = edges.filter(e => e.id !== selectedEdgeId);
                     setEdges(newEdges);
-                    virtualPortService.updateGraph(nodes, newEdges);
+                    graphService.updateGraph(nodes, newEdges);
                     setSelectedEdgeId(null);
                 }
             }
@@ -98,24 +95,6 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
     };
 
     const handleDragEnd = (event: DragEndEvent) => {
-        // ...
-        // ... inside return ...
-        {
-            nodes.map(node => (
-                <GraphNode
-                    key={node.id}
-                    {...node}
-                    x={node.position.x}
-                    y={node.position.y}
-                    isSelected={selectedNodeId === node.id}
-                    onSelect={(id) => {
-                        setSelectedNodeId(id);
-                        setSelectedEdgeId(null);
-                    }}
-                    onHandleMouseDown={handleHandleMouseDown}
-                />
-            ))
-        }
         const { id } = event.active;
         const { delta } = event;
 
@@ -133,7 +112,7 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
         });
 
         setNodes(newNodes);
-        virtualPortService.updateGraph(newNodes, edges);
+        graphService.updateGraph(newNodes, edges);
         setActiveDrag(null);
     };
 
@@ -148,7 +127,7 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
         };
         const newNodes = [...nodes, newNode];
         setNodes(newNodes);
-        virtualPortService.updateGraph(newNodes, edges);
+        graphService.updateGraph(newNodes, edges);
     };
 
     // Helper to get handle position
@@ -189,12 +168,7 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
     };
 
     const handleWireMouseUp = (e: MouseEvent) => {
-        // Check if we dropped on a handle?
-        // We can check if e.target has data-handle-id attribute or we rely on standard collision?
-        // Or simpler: The Handle div stops propagation? No, wire drag is on window.
-        // We need to hit-test.
-
-        // Let's rely on the DOM element under cursor
+        // Check if we dropped on a handle
         const targetEl = document.elementFromPoint(e.clientX, e.clientY);
         // Traverse up to find handle
         let handleEl = targetEl;
@@ -205,20 +179,12 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
 
         if (handleEl && tempEdgeRef.current) {
             const targetId = handleEl.getAttribute('data-handle-id');
-            const targetType = handleEl.getAttribute('data-handle-type'); // Need to add this to GraphNode
+            const targetType = handleEl.getAttribute('data-handle-type');
 
             if (targetId && targetType && targetId !== tempEdgeRef.current.sourceNode) {
                 // Determine Source vs Target based on Types
-                // A connection must be Source(Output) -> Target(Input).
-                // Or we allow arbitrary? Let's enforce direction.
-                // Our GraphNode handles: 'source' (Right, Output), 'target' (Left, Input).
-
                 let sourceNodeId = tempEdgeRef.current.sourceNode;
                 let targetNodeId = targetId;
-
-                // If we dragged from Input -> needs to land on Output? Or Input to Output?
-                // Standard: Drag from Output -> Drop on Input. Or Drag from Input -> Drop on Output.
-                // If types match (Output->Output), reject?
 
                 let isValid = false;
                 if (tempEdgeRef.current.type === 'source' && targetType === 'target') {
@@ -241,7 +207,7 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
                         };
                         const newEdges = [...edges, newEdge];
                         setEdges(newEdges);
-                        virtualPortService.updateGraph(nodes, newEdges);
+                        graphService.updateGraph(nodes, newEdges);
                     }
                 }
             }
@@ -255,8 +221,8 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
     };
 
     const clearGraph = () => {
-        if (confirm('Are you sure you want to clear the entire graph?')) {
-            virtualPortService.updateGraph([], []);
+        if (confirm('确定要清空整个图形吗？')) {
+            graphService.updateGraph([], []);
         }
     };
 
@@ -277,7 +243,6 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
         else if (e.button === 0) {
             const target = e.target as HTMLElement;
             // Check if clicking on the main container or the graph surface
-            // This allows deselecting when clicking empty space
             if (target === e.currentTarget || target.getAttribute('data-id') === 'graph-surface') {
                 setSelectedNodeId(null);
                 setSelectedEdgeId(null);
@@ -324,27 +289,20 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
             {/* Toolbar */}
             <div className="absolute top-4 left-4 z-50 flex gap-2">
                 <div className="flex bg-[#252526] rounded-md border border-[#3c3c3c] overflow-hidden shadow-lg">
-                    <button onClick={() => addNode('virtual')} className="p-2 hover:bg-[#3c3c3c] text-[#4ec9b0]" title="Add Virtual Node">
+                    <button onClick={() => addNode('virtual')} className="p-2 hover:bg-[#3c3c3c] text-[#4ec9b0]" title="添加虚拟节点">
                         <Plus size={16} />
                     </button>
-                    <button onClick={() => addNode('physical')} className="p-2 hover:bg-[#3c3c3c] text-[#ce9178]" title="Add Physical Node">
+                    <button onClick={() => addNode('physical')} className="p-2 hover:bg-[#3c3c3c] text-[#ce9178]" title="添加物理节点">
                         <Plus size={16} />
                     </button>
-                    <button onClick={() => addNode('pair')} className="p-2 hover:bg-[#3c3c3c] text-[#c586c0]" title="Add Logic: Pairing Node">
+                    <button onClick={() => addNode('pair')} className="p-2 hover:bg-[#3c3c3c] text-[#c586c0]" title="添加配对节点">
                         <Link size={16} />
                     </button>
-                    <button onClick={() => addNode('bus')} className="p-2 hover:bg-[#3c3c3c] text-[#dcdcaa]" title="Add Logic: Shared Bus">
+                    <button onClick={() => addNode('bus')} className="p-2 hover:bg-[#3c3c3c] text-[#dcdcaa]" title="添加共享总线">
                         <Network size={16} />
                     </button>
                     <div className="w-[1px] bg-[#3c3c3c]"></div>
-                    <button onClick={() => {
-                        if (confirm('Clear all legacy virtual ports (Pairs, Switches)? Graph nodes will remain.')) {
-                            virtualPortService.clearLegacyConfigs();
-                        }
-                    }} className="p-2 hover:bg-orange-900/50 text-orange-400" title="Clear Legacy/Orphaned Ports">
-                        <Eraser size={16} />
-                    </button>
-                    <button onClick={clearGraph} className="p-2 hover:bg-red-900/50 text-red-400" title="Clear Graph">
+                    <button onClick={clearGraph} className="p-2 hover:bg-red-900/50 text-red-400" title="清空图形">
                         <Trash2 size={16} />
                     </button>
                 </div>
@@ -383,13 +341,6 @@ export const VirtualGraphEditor = ({ sessionId }: VirtualGraphEditorProps) => {
                     />
 
                     {nodes.map(node => {
-                        // Apply active drag visually?? 
-                        // DndKit handles the transform of the DRAGGING item automatically for the dragger.
-                        // But GraphCanvas needs the position. 
-                        // AND strictly speaking, DndKit uses `transform` on the element.
-                        // We are not manually moving the node in render until DragEnd.
-                        // So GraphCanvas needs the `activeDrag` delta to adjust its calculation.
-                        // The Node itself is moved by DndKit's `useDraggable` transform.
                         return (
                             <GraphNode
                                 key={node.id}

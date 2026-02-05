@@ -1,9 +1,9 @@
-import { GraphNode, GraphEdge } from '../VirtualPortService';
+import { GraphNode as IGraphNode, GraphEdge as IGraphEdge } from '../../services/GraphService';
 import { GraphLayout } from './GraphStyles';
 
 interface GraphCanvasProps {
-    nodes: GraphNode[];
-    edges: GraphEdge[];
+    nodes: IGraphNode[];
+    edges: IGraphEdge[];
     tempEdge?: { sourceX: number, sourceY: number, targetX: number, targetY: number } | null;
     activeDrag?: { id: string, delta: { x: number, y: number } } | null;
     selectedEdgeId?: string | null;
