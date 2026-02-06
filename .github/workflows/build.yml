@@ -30,8 +30,13 @@ jobs:
         shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          # 提取当前版本到下一个二级标题（或文件末尾）之间的内容
-          sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '1d;$d' > release_notes.md
+          echo "Extracting notes for version: $VERSION"
+          # 使用 awk 提取当前版本之后的内容，直到遇到下一个 ## 标题或文件末尾
+          awk "/## \[$VERSION\]/{flag=1;next} /^## \[/{flag=0} flag" CHANGELOG.md > release_notes.md
+          echo "--- Extracted Release Notes ---"
+          cat release_notes.md
+          echo "-------------------------------"
+          # 将内容存入环境变量（可选，但 release_notes.md 文件才是 electron-builder 使用的）
           echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
           cat release_notes.md >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
