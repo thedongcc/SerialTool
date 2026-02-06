@@ -47,5 +47,23 @@ declare global {
             save: (sessions: any[]) => Promise<{ success: boolean; error?: string }>;
             load: () => Promise<{ success: boolean; data?: any[]; error?: string }>;
         }
+        com0comAPI: {
+            exec: (command: string) => Promise<{ success: boolean; stdout?: string; stderr?: string; error?: string }>;
+            installDriver: () => Promise<{ success: boolean; path?: string; error?: string }>;
+        }
+        tcpAPI: {
+            start: (port: number) => Promise<{ success: boolean; error?: string }>;
+            stop: (port: number) => Promise<boolean>;
+            write: (port: number, data: any) => Promise<boolean>;
+            onData: (callback: (port: number, data: Uint8Array) => void) => () => void;
+        }
+        updateAPI: {
+            check: () => Promise<any>;
+            download: () => Promise<any>;
+            install: () => void;
+            onStatus: (callback: (data: any) => void) => () => void;
+            onProgress: (callback: (progress: any) => void) => () => void;
+        }
     }
 }
+

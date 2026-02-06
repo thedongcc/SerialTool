@@ -10,11 +10,14 @@ import { useSessionManager } from '../../hooks/useSessionManager';
 import { SessionProvider } from '../../context/SessionContext';
 
 import { PluginProvider } from '../../context/PluginContext';
+import { useAutoUpdate } from '../../hooks/useAutoUpdate';
+import { UpdateDialog } from '../common/UpdateDialog';
 
 export const Layout = ({ children }: { children?: ReactNode }) => {
     const [activeView, setActiveView] = useState('explorer');
     const sessionManager = useSessionManager();
     const editorLayout = useEditorLayout();
+    const { showUpdateDialog, setShowUpdateDialog } = useAutoUpdate();
 
     const handleOpenSettings = async () => {
         // Check if settings session exists
@@ -52,7 +55,9 @@ export const Layout = ({ children }: { children?: ReactNode }) => {
                     </div>
                     <StatusBar />
                 </div>
+                {showUpdateDialog && <UpdateDialog onClose={() => setShowUpdateDialog(false)} />}
             </PluginProvider>
         </SessionProvider>
     );
 };
+

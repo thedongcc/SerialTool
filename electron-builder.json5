@@ -3,6 +3,13 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.thedong.serialtool",
   "asar": true,
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "thedongcc",
+      "repo": "SerialTool"
+    }
+  ],
   "productName": "SerialTool",
   "directories": {
     "output": "release/${version}"

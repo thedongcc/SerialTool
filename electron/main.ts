@@ -547,14 +547,78 @@ function createWindow() {
   }
 
   // Initialize TCP Service with this window
-  // Note: TcpService.ts needs to be compiled to JS if using TS.
-  // Since this is electron/main.ts (TS), TcpService.ts (TS) should be fine if built together.
-  // But 'require' might expect .js or .ts depending on setup.
-  // Assuming tsc/vite handles it.
   tcpService = new TcpService(win.webContents);
+
+  // Initialize AutoUpdater
+  const updater = new AppUpdater(win);
+  updater.init();
+}
+
+import { autoUpdater } from 'electron-updater';
+
+class AppUpdater {
+  private win: BrowserWindow;
+
+  constructor(win: BrowserWindow) {
+    this.win = win;
+
+    // Configure autoUpdater
+    autoUpdater.autoDownload = false; // We want manual control via UI
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    // Logging (optional, useful for debugging)
+    // autoUpdater.logger = require('electron-log');
+    // @ts-ignore
+    // autoUpdater.logger.transports.file.level = 'info';
+  }
+
+  init() {
+    autoUpdater.on('checking-for-update', () => {
+      this.win.webContents.send('update:status', { type: 'checking' });
+    });
+
+    autoUpdater.on('update-available', (info) => {
+      this.win.webContents.send('update:status', {
+        type: 'available',
+        version: info.version,
+        releaseNotes: info.releaseNotes,
+        releaseDate: info.releaseDate
+      });
+    });
+
+    autoUpdater.on('update-not-available', (info) => {
+      this.win.webContents.send('update:status', { type: 'not-available', version: info.version });
+    });
+
+    autoUpdater.on('error', (err) => {
+      this.win.webContents.send('update:status', { type: 'error', error: err.message });
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+      this.win.webContents.send('update:progress', progressObj);
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+      this.win.webContents.send('update:status', { type: 'downloaded', version: info.version });
+    });
+
+    // IPC Handlers for update
+    ipcMain.handle('update:check', () => {
+      return autoUpdater.checkForUpdates();
+    });
+
+    ipcMain.handle('update:download', () => {
+      return autoUpdater.downloadUpdate();
+    });
+
+    ipcMain.handle('update:install', () => {
+      autoUpdater.quitAndInstall();
+    });
+  }
 }
 
 // --- TCP Service Integration ---
+
 // 内联 TcpService 类定义以避免打包时的模块解析问题
 class TcpService {
   private servers: Map<number, any> = new Map();
@@ -627,6 +691,10 @@ ipcMain.handle('tcp:stop', async (_event, port: number) => {
 ipcMain.handle('tcp:write', async (_event, { port, data }) => {
   if (tcpService) tcpService.write(port, data);
   return true;
+});
+
+ipcMain.handle('app:version', () => {
+  return app.getVersion();
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common

@@ -1,0 +1,29 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # 当推送以 v 开头的 tag (如 v0.0.1) 时触发
+
+jobs:
+  build:
+    runs-on: windows-latest # 你的软件目前侧重 Windows，使用 Windows 构建最稳定
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build and Publish
+        run: npm run build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 使用 Actions 自动生成的 Token 即可
+          # 如果你想手动指定额外的发布 Token，也可以改用 ${{ secrets.GH_TOKEN }}

@@ -117,3 +117,20 @@ contextBridge.exposeInMainWorld('tcpAPI', {
     return () => ipcRenderer.off('tcp:data', listener);
   }
 });
+contextBridge.exposeInMainWorld('updateAPI', {
+  check: () => ipcRenderer.invoke('update:check'),
+  download: () => ipcRenderer.invoke('update:download'),
+  install: () => ipcRenderer.invoke('update:install'),
+  getVersion: () => ipcRenderer.invoke('app:version'),
+  onStatus: (callback: (data: any) => void) => {
+
+    const listener = (_: any, data: any) => callback(data);
+    ipcRenderer.on('update:status', listener);
+    return () => ipcRenderer.off('update:status', listener);
+  },
+  onProgress: (callback: (progress: any) => void) => {
+    const listener = (_: any, progress: any) => callback(progress);
+    ipcRenderer.on('update:progress', listener);
+    return () => ipcRenderer.off('update:progress', listener);
+  }
+});
