@@ -103,7 +103,43 @@ export const SerialInput = ({
                 });
             }
         },
-    }, [extensions, editorProps]); // Add dependency array to useEditor just in case (TipTap supports it)
+    }, [extensions, editorProps]);
+
+    // Helper to sync state to parent
+    const syncState = useCallback(() => {
+        if (!editor || !onStateChange || !isReadyRef.current) return;
+
+        const json = editor.getJSON();
+        const tokensMap: Record<string, Token> = {};
+        const traverse = (node: any) => {
+            if (node.type === 'serialToken') {
+                const { id, type, config } = node.attrs;
+                tokensMap[id] = { id, type, config };
+            }
+            if (node.content) node.content.forEach(traverse);
+        };
+        traverse(json);
+
+        onStateChange({
+            content: editor.getText(),
+            html: editor.getHTML(),
+            tokens: tokensMap,
+            mode,
+            lineEnding
+        });
+    }, [editor, onStateChange, mode, lineEnding]);
+
+    // Sync on mode or lineEnding change
+    useEffect(() => {
+        syncState();
+    }, [mode, lineEnding, syncState]);
+
+    // Initial sync once ready
+    useEffect(() => {
+        if (editor && isReadyRef.current) {
+            syncState();
+        }
+    }, [editor, syncState]);
 
     // Handle Token Clicks
     useEffect(() => {

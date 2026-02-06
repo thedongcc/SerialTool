@@ -101,10 +101,10 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
             const isInput = ['INPUT', 'TEXTAREA'].includes(activeEl?.tagName || '');
             const isContentEditable = activeEl?.getAttribute('contenteditable') === 'true';
 
-            // Also check if a modal dialog is open (has z-50 class)
-            const hasModalOpen = document.querySelector('.fixed.z-50');
+            // Also check if a modal dialog is open (has z-50 class or is a DIALOG)
+            const hasModalOpen = document.querySelector('.fixed.z-50') || document.querySelector('dialog[open]');
 
-            if (isInput || isContentEditable || hasModalOpen) return;
+            if (isInput || isContentEditable || !!hasModalOpen) return;
 
             // Undo / Redo
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
