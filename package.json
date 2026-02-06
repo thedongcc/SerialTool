@@ -4,6 +4,10 @@
   "version": "0.0.1",
   "description": "A powerful serial port debugging tool.",
   "author": "thedongcc",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thedongcc/SerialTool.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build && electron-builder -p always",

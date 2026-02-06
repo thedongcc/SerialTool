@@ -37,11 +37,14 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
 
       - name: Build and Publish
+        shell: bash
         run: |
-          echo "Current Version: $(node -p "require('./package.json').version")"
-          ls -R
-          npm run build -- --publish always
+          echo "Determined Version: $(node -p "require('./package.json').version")"
+          # 运行构建，开启调试日志并显式发布
+          DEBUG=electron-builder npm run build -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG: electron-builder
+
 
 
