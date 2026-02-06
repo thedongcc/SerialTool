@@ -2,6 +2,8 @@
   "name": "serial-tool-v1",
   "private": true,
   "version": "0.0.1",
+  "description": "A powerful serial port debugging tool.",
+  "author": "thedongcc",
   "scripts": {
     "dev": "vite",
     "build": "vite build && electron-builder -p always",

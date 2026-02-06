@@ -11,8 +11,11 @@
       "releaseType": "draft"
     }
   ],
-  "releaseNotesFile": "release_notes.md",
+  "releaseInfo": {
+    "releaseNotesFile": "release_notes.md"
+  },
   "win": {
+
 
     "target": [
       "nsis"
