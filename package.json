@@ -10,7 +10,9 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build && electron-builder -p always",
+    "build:app": "vite build",
+    "build:dist": "electron-builder",
+    "build": "npm run build:app && npm run build:dist -p always",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },

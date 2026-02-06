@@ -36,15 +36,23 @@ jobs:
           cat release_notes.md >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      - name: Build and Publish
+      - name: Build Application
+        run: npm run build:app
+
+      - name: List Build Artifacts
+        shell: bash
+        run: ls -R dist dist-electron
+
+      - name: Build and Publish Electron
         shell: bash
         run: |
-          echo "Determined Version: $(node -p "require('./package.json').version")"
-          # 运行构建，开启调试日志并显式发布
-          DEBUG=electron-builder npm run build -- --publish always
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Building and Publishing version: $VERSION"
+          # 直接运行 electron-builder 以确保参数透传
+          DEBUG=electron-builder ./node_modules/.bin/electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEBUG: electron-builder
+
 
 
 
