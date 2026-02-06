@@ -5,7 +5,11 @@ on:
     tags:
       - 'v*' # 当推送以 v 开头的 tag (如 v0.0.1) 时触发
 
+permissions:
+  contents: write # 显式授予创建 Release 和上传文件的权限
+
 jobs:
+
   build:
     runs-on: windows-latest # 你的软件目前侧重 Windows，使用 Windows 构建最稳定
 
