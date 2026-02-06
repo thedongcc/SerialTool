@@ -1,28 +1,37 @@
 {
   "appId": "com.thedong.serialtool",
+  "productName": "SerialTool",
   "asar": true,
+  "icon": "resources/icon.ico",
   "publish": [
     {
       "provider": "github",
       "owner": "thedongcc",
       "repo": "SerialTool",
-      "releaseType": "draft"
+      "releaseType": "draft",
+      "releaseNotesFile": "release_notes.md"
     }
   ],
   "releaseInfo": {
     "releaseNotesFile": "release_notes.md"
   },
-  "productName": "SerialTool",
   "win": {
+    "icon": "resources/icon.ico",
     "target": [
-      "nsis"
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
     ]
   },
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
-    "shortcutName": "SerialTool"
+    "shortcutName": "SerialTool",
+    "artifactName": "${productName}-Setup-${version}.${ext}"
   },
   "directories": {
     "output": "release/${version}"
