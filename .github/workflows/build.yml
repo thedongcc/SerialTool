@@ -26,8 +26,18 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
+      - name: Extract Release Notes
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          # 提取当前版本到下一个二级标题（或文件末尾）之间的内容
+          sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '1d;$d' > release_notes.md
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          cat release_notes.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
       - name: Build and Publish
-        run: npm run build
+        run: npm run build -- -c.releaseNotesFile=release_notes.md
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 使用 Actions 自动生成的 Token 即可
-          # 如果你想手动指定额外的发布 Token，也可以改用 ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

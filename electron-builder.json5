@@ -7,10 +7,24 @@
     {
       "provider": "github",
       "owner": "thedongcc",
-      "repo": "SerialTool"
+      "repo": "SerialTool",
+      "releaseType": "draft"
     }
   ],
-  "productName": "SerialTool",
+  "win": {
+    "target": [
+      "nsis"
+    ],
+    "publish": [
+      "github"
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "shortcutName": "SerialTool"
+  },
   "directories": {
     "output": "release/${version}"
   },
