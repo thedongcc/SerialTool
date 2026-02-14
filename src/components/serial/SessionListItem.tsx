@@ -3,8 +3,10 @@ import { CSS } from '@dnd-kit/utilities';
 import { SessionConfig, SessionType } from '../../types/session';
 import { FolderOpen, Network, Cpu } from 'lucide-react';
 
+import { SerialPortInfo } from '../../vite-env';
 interface SessionListItemProps {
     session: SessionConfig;
+    portInfo?: SerialPortInfo;
     isActive: boolean;
     isEditing: boolean;
     editName: string;
@@ -25,6 +27,7 @@ const getIconForType = (type: SessionType) => {
 
 export const SessionListItem = ({
     session,
+    portInfo,
     isActive,
     isEditing,
     editName,
@@ -41,7 +44,7 @@ export const SessionListItem = ({
         transform,
         transition,
         isDragging
-    } = useSortable({ id: session.id });
+    } = useSortable({ id: session.id, disabled: isEditing });
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -76,15 +79,37 @@ export const SessionListItem = ({
                         if (e.key === 'Escape') onCancelEdit();
                     }}
                     onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
                 />
             ) : (
                 <div className="flex flex-col overflow-hidden flex-1">
                     <span className="truncate font-medium">{session.name}</span>
                     <span className="text-[10px] text-[#858585] truncate">
-                        {session.type === 'serial' ? `${(session as any).connection?.path || 'No Port'}` : (session as any).brokerUrl || session.type}
+                        {session.type === 'serial'
+                            ? (portInfo
+                                ? formatPortInfo(portInfo)
+                                : `${(session as any).connection?.path || 'No Port'}`)
+                            : (session as any).brokerUrl || session.type}
                     </span>
                 </div>
             )}
         </div>
     );
+};
+
+const formatPortInfo = (port: SerialPortInfo) => {
+    let name = port.friendlyName || '';
+    // Remove (COMx) repetition
+    name = name.replace(/\(COM\d+\)/gi, '').trim();
+    // Remove path repetition if friendlyName starts with it
+    if (name.startsWith(port.path)) {
+        name = name.substring(port.path.length).trim();
+    }
+
+    // Add manufacturer if not already in name
+    if (port.manufacturer && !name.includes(port.manufacturer)) {
+        name = `${name} (${port.manufacturer})`;
+    }
+
+    return `${port.path} ${name}`.trim();
 };

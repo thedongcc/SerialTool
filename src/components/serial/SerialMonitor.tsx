@@ -9,6 +9,7 @@ import { useToast } from '../../context/ToastContext';
 import { useCommandContext } from '../../context/CommandContext';
 import { ContextMenu } from '../common/ContextMenu';
 import { CommandEditorDialog } from '../commands/CommandEditorDialog';
+import { generateUniqueName } from '../../utils/commandUtils';
 
 const formatTimestamp = (ts: number, fmt: string) => {
     const date = new Date(ts);
@@ -249,7 +250,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
     // Actually, saveUIState uses 'onUpdateConfig'. We should wrap saveUIState in useCallback too or just put deps here.
 
     // Command Context
-    const { addCommand } = useCommandContext();
+    const { addCommand, commands } = useCommandContext();
 
     // Context Menu State
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, log: any } | null>(null);
@@ -278,7 +279,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
         const payload = formatData(log.data, viewMode, encoding);
         // Open Editor Dialog
         setShowCommandEditor({
-            name: 'New Command',
+            name: generateUniqueName(commands, 'command', undefined),
             payload: payload,
             mode: viewMode === 'hex' ? 'hex' : 'text',
             tokens: {},
@@ -794,6 +795,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                     }}
                     onClose={() => setShowCommandEditor(null)}
                     onSave={handleSaveCommand}
+                    existingNames={commands.filter(c => !c.parentId).map(c => c.name)}
                 />
             )}
         </div>

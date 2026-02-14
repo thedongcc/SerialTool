@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Check, X, Info, AlertTriangle } from 'lucide-react';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -8,36 +8,108 @@ interface ToastProps {
     type?: ToastType;
     duration?: number;
     onClose: () => void;
+    onExpire?: () => void;
+    closing?: boolean;
 }
 
-export const Toast: React.FC<ToastProps> = ({ message, type = 'success', duration = 2000, onClose }) => {
-    useEffect(() => {
-        if (duration > 0) {
-            const timer = setTimeout(() => {
-                onClose();
-            }, duration);
-            return () => clearTimeout(timer);
-        }
-    }, [duration, onClose]);
+export const Toast: React.FC<ToastProps> = ({ message, type = 'success', duration = 1000, onClose, onExpire, closing = false }) => {
+    const [isClosing, setIsClosing] = React.useState(false);
 
-    const getIcon = () => {
-        switch (type) {
-            case 'success': return <Check size={16} className="text-green-500" />;
-            case 'error': return <X size={16} className="text-red-500" />;
-            case 'warning': return <AlertTriangle size={16} className="text-yellow-500" />;
-            case 'info': return <Info size={16} className="text-blue-500" />;
+    const handleClose = React.useCallback(() => {
+        setIsClosing(true);
+        // Fallback: Ensure it closes even if animation doesn't trigger
+        setTimeout(() => {
+            onClose();
+        }, 350);
+    }, [onClose]);
+
+    useEffect(() => {
+        if (closing) {
+            handleClose();
+        }
+    }, [closing, handleClose]);
+
+    const handleAnimationEnd = () => {
+        if (isClosing) {
+            onClose();
         }
     };
 
+    // Use refs to access latest callbacks without resetting timer
+    const onExpireRef = useRef(onExpire);
+    const handleCloseRef = useRef(handleClose);
+
+    useEffect(() => {
+        onExpireRef.current = onExpire;
+        handleCloseRef.current = handleClose;
+    }, [onExpire, handleClose]);
+
+    useEffect(() => {
+        if (duration > 0) {
+            const timer = setTimeout(() => {
+                if (onExpireRef.current) {
+                    onExpireRef.current();
+                } else {
+                    handleCloseRef.current();
+                }
+            }, duration);
+            return () => clearTimeout(timer);
+        }
+    }, [duration]); // Only depend on duration, preventing resets on re-renders
+
+    const getStyles = () => {
+        switch (type) {
+            case 'success': return {
+                borderColor: '#22c55e', // green-500
+                shadow: '0 0 15px rgba(34, 197, 94, 0.2)',
+                icon: <Check size={18} className="text-green-500" />
+            };
+            case 'error': return {
+                borderColor: '#ef4444', // red-500
+                shadow: '0 0 15px rgba(239, 68, 68, 0.2)',
+                icon: <X size={18} className="text-red-500" />
+            };
+            case 'warning': return {
+                borderColor: '#eab308', // yellow-500
+                shadow: '0 0 15px rgba(234, 179, 8, 0.2)',
+                icon: <AlertTriangle size={18} className="text-yellow-500" />
+            };
+            case 'info': return {
+                borderColor: '#3b82f6', // blue-500
+                shadow: '0 0 15px rgba(59, 130, 246, 0.2)',
+                icon: <Info size={18} className="text-blue-500" />
+            };
+        }
+    };
+
+    const styles = getStyles();
+
     return (
         <div
-            className="fixed top-10 left-1/2 -translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-top-4 duration-200 cursor-pointer"
-            onClick={onClose}
+            className={`
+                relative flex items-center gap-3 px-4 py-3 
+                bg-[#252526] border-2
+                rounded-md min-w-[300px] max-w-[400px]
+                cursor-pointer 
+                transition-all duration-300 ease-in-out
+                hover:opacity-90 
+            `}
+            style={{
+                borderColor: styles.borderColor,
+                boxShadow: styles.shadow,
+                opacity: isClosing ? 0 : 1,
+                transform: isClosing ? 'translateY(-20px)' : 'translateY(0)',
+            }}
+            onClick={handleClose}
+            onTransitionEnd={handleAnimationEnd}
         >
-            <div className="flex items-center gap-3 px-4 py-2 bg-[#252526] border border-[#3c3c3c] shadow-xl rounded-md min-w-[200px]">
-                {getIcon()}
-                <span className="text-sm font-medium text-[#cccccc]">{message}</span>
+            <div className="shrink-0">
+                {styles.icon}
             </div>
+            <span className="text-sm font-medium text-[#e0e0e0] flex-1 break-words leading-tight">
+                {message}
+            </span>
+            <X size={14} className="text-[#666] hover:text-[#999] shrink-0" />
         </div>
     );
 };

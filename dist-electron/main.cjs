@@ -14458,7 +14458,7 @@ function createWindow() {
       color: "#3c3c3c",
       // Matches --vscode-titlebar
       symbolColor: "#cccccc",
-      height: 30
+      height: 29
     }
   });
   win.once("ready-to-show", () => {
@@ -14612,23 +14612,139 @@ function createWindow() {
     return { success: false };
   });
   const fs2 = require("fs").promises;
-  const sessionsFile = path$m.join(require$$1$3.app.getPath("userData"), "sessions.json");
-  require$$1$3.ipcMain.handle("session:save", async (_event, sessions) => {
+  const workspaceStateFile = path$m.join(require$$1$3.app.getPath("userData"), "workspace-state.json");
+  const defaultWorkspacePath = path$m.join(require$$1$3.app.getPath("userData"), "DefaultWorkspace");
+  require$$1$3.ipcMain.handle("workspace:getLastWorkspace", async () => {
     try {
-      await fs2.writeFile(sessionsFile, JSON.stringify(sessions, null, 2));
+      const data = await fs2.readFile(workspaceStateFile, "utf-8");
+      const state2 = JSON.parse(data);
+      return { success: true, path: state2.lastWorkspace || null };
+    } catch {
+      return { success: true, path: null };
+    }
+  });
+  require$$1$3.ipcMain.handle("workspace:getRecentWorkspaces", async () => {
+    try {
+      const data = await fs2.readFile(workspaceStateFile, "utf-8");
+      const state2 = JSON.parse(data);
+      return { success: true, workspaces: state2.recentWorkspaces || [] };
+    } catch {
+      return { success: true, workspaces: [] };
+    }
+  });
+  require$$1$3.ipcMain.handle("workspace:setLastWorkspace", async (_event, wsPath) => {
+    try {
+      let state2 = { lastWorkspace: null, recentWorkspaces: [] };
+      try {
+        const data = await fs2.readFile(workspaceStateFile, "utf-8");
+        state2 = JSON.parse(data);
+      } catch {
+      }
+      if (wsPath) {
+        state2.lastWorkspace = wsPath;
+        const currentRecent = state2.recentWorkspaces || [];
+        const filtered = currentRecent.filter((p) => p !== wsPath);
+        state2.recentWorkspaces = [wsPath, ...filtered].slice(0, 10);
+      } else {
+        state2.lastWorkspace = null;
+      }
+      await fs2.writeFile(workspaceStateFile, JSON.stringify(state2, null, 2));
       return { success: true };
     } catch (error2) {
       return { success: false, error: error2.message };
     }
   });
-  require$$1$3.ipcMain.handle("session:load", async () => {
+  require$$1$3.ipcMain.handle("workspace:openFolder", async () => {
+    const result = await require$$1$3.dialog.showOpenDialog(win, {
+      properties: ["openDirectory"],
+      title: "Select Workspace Folder"
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+    return { success: true, path: result.filePaths[0] };
+  });
+  require$$1$3.ipcMain.handle("workspace:listSessions", async (_event, wsPath) => {
     try {
-      const data = await fs2.readFile(sessionsFile, "utf-8");
-      return { success: true, data: JSON.parse(data) };
+      await fs2.mkdir(wsPath, { recursive: true });
+      const files = await fs2.readdir(wsPath);
+      const sessions = [];
+      for (const file2 of files) {
+        if (!file2.endsWith(".json")) continue;
+        try {
+          const content = await fs2.readFile(path$m.join(wsPath, file2), "utf-8");
+          const config = JSON.parse(content);
+          if (config && config.id && config.type) {
+            sessions.push(config);
+          }
+        } catch {
+        }
+      }
+      return { success: true, data: sessions };
     } catch (error2) {
-      if (error2.code === "ENOENT") return { success: true, data: [] };
       return { success: false, error: error2.message };
     }
+  });
+  require$$1$3.ipcMain.handle("workspace:saveSession", async (_event, wsPath, config) => {
+    try {
+      await fs2.mkdir(wsPath, { recursive: true });
+      const safeName = config.name.replace(/[<>:"/\\|?*]/g, "_");
+      const filePath = path$m.join(wsPath, `${safeName}.json`);
+      await fs2.writeFile(filePath, JSON.stringify(config, null, 2));
+      return { success: true, filePath };
+    } catch (error2) {
+      return { success: false, error: error2.message };
+    }
+  });
+  require$$1$3.ipcMain.handle("workspace:deleteSession", async (_event, wsPath, config) => {
+    try {
+      const safeName = config.name.replace(/[<>:"/\\|?*]/g, "_");
+      const filePath = path$m.join(wsPath, `${safeName}.json`);
+      await fs2.unlink(filePath);
+      return { success: true };
+    } catch (error2) {
+      return { success: false, error: error2.message };
+    }
+  });
+  require$$1$3.ipcMain.handle("workspace:renameSession", async (_event, wsPath, oldName, newName) => {
+    try {
+      const safeOld = oldName.replace(/[<>:"/\\|?*]/g, "_");
+      const safeNew = newName.replace(/[<>:"/\\|?*]/g, "_");
+      const oldPath = path$m.join(wsPath, `${safeOld}.json`);
+      const newPath = path$m.join(wsPath, `${safeNew}.json`);
+      await fs2.rename(oldPath, newPath);
+      return { success: true };
+    } catch (error2) {
+      return { success: false, error: error2.message };
+    }
+  });
+  const oldSessionsFile = path$m.join(require$$1$3.app.getPath("userData"), "sessions.json");
+  require$$1$3.ipcMain.handle("workspace:migrateOldSessions", async () => {
+    try {
+      const data = await fs2.readFile(oldSessionsFile, "utf-8");
+      const sessions = JSON.parse(data);
+      if (Array.isArray(sessions) && sessions.length > 0) {
+        await fs2.mkdir(defaultWorkspacePath, { recursive: true });
+        for (const config of sessions) {
+          if (!config || !config.name) continue;
+          const safeName = config.name.replace(/[<>:"/\\|?*]/g, "_");
+          await fs2.writeFile(
+            path$m.join(defaultWorkspacePath, `${safeName}.json`),
+            JSON.stringify(config, null, 2)
+          );
+        }
+        await fs2.rename(oldSessionsFile, oldSessionsFile + ".bak");
+        return { success: true, migrated: sessions.length, path: defaultWorkspacePath };
+      }
+      return { success: false, migrated: 0 };
+    } catch {
+      return { success: false, migrated: 0 };
+    }
+  });
+  require$$1$3.ipcMain.handle("session:save", async () => ({ success: true }));
+  require$$1$3.ipcMain.handle("session:load", async () => ({ success: true, data: [] }));
+  require$$1$3.ipcMain.handle("shell:openExternal", async (_event, url) => {
+    await require$$1$3.shell.openExternal(url);
   });
   win.webContents.on("did-finish-load", () => {
     win == null ? void 0 : win.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
@@ -14831,6 +14947,23 @@ require$$1$3.ipcMain.handle("tcp:write", async (_event, { port, data }) => {
 });
 require$$1$3.ipcMain.handle("app:version", () => {
   return require$$1$3.app.getVersion();
+});
+let lastCpuUsage = process.cpuUsage();
+let lastCpuTime = Date.now();
+require$$1$3.ipcMain.handle("system:stats", async () => {
+  const mem = process.memoryUsage();
+  const memUsedMB = Math.round(mem.rss / 1024 / 1024);
+  const currentCpuUsage = process.cpuUsage(lastCpuUsage);
+  const currentTime = Date.now();
+  const elapsedMs = currentTime - lastCpuTime;
+  const totalCpuUs = currentCpuUsage.user + currentCpuUsage.system;
+  const cpuPercent = elapsedMs > 0 ? Math.min(100, Math.round(totalCpuUs / 1e3 / elapsedMs * 100)) : 0;
+  lastCpuUsage = process.cpuUsage();
+  lastCpuTime = currentTime;
+  return {
+    cpu: cpuPercent,
+    memUsed: memUsedMB
+  };
 });
 require$$1$3.app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

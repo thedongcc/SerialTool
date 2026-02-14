@@ -6,7 +6,7 @@
 
 **前情提要** 本软件是Vibe Coding产物，仅供学习或参考，不建议在生产环境中使用。
 
-**SerialTool V1** 是一款面向未来的、高性能、极具现代感的全能型串口调试辅助工具。它不仅支持传统的串口通信，还集成了 MQTT、TCP 等协议，并提供强大的图形化编辑器与自动化流水线。
+**SerialTool** 是一款面向未来的、高性能、极具现代感的全能型串口调试辅助工具。它不仅支持传统的串口通信，还集成了 MQTT、TCP(未开发) 等协议，并提供强大的图形化编辑器与自动化流水线。
 
 ---
 
@@ -79,3 +79,14 @@ npm run build
 
 **Author**: [@thedongcc](https://github.com/thedongcc)  
 **License**: [MIT](file:///p:/Webstorm/SerialTool_V1/LICENSE)
+
+---
+
+## ☕ 赞赏支持
+
+如果本项目对您有所帮助，欢迎请我喝杯咖啡，支持我继续完善 SerialTool！
+
+<div align="left">
+  <img src="resources/payment/wechat.png" alt="WeChat Pay" width="200" style="margin-right: 20px;" />
+  <img src="resources/payment/alipay.jpg" alt="Alipay" width="200" />
+</div>

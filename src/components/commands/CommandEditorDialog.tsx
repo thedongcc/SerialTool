@@ -2,15 +2,18 @@ import { useRef, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { CommandEntity, CommandItem } from '../../types/command';
 import { SerialInput } from '../serial/SerialInput';
+import { useToast } from '../../context/ToastContext';
 
 interface Props {
     item: CommandEntity;
     onClose: () => void;
     onSave: (updates: Partial<CommandEntity>) => void;
+    existingNames: string[];
 }
 
-export const CommandEditorDialog = ({ item, onClose, onSave }: Props) => {
+export const CommandEditorDialog = ({ item, onClose, onSave, existingNames }: Props) => {
     const [name, setName] = useState(item.name);
+    const { showToast } = useToast();
     // State to hold current input state from SerialInput
     const inputStateRef = useRef<{ content: string; html: string; tokens: any; mode: 'text' | 'hex'; lineEnding: any } | null>(null);
 
@@ -19,7 +22,16 @@ export const CommandEditorDialog = ({ item, onClose, onSave }: Props) => {
     const commandItem = isCommand ? (item as CommandItem) : null;
 
     const handleSave = () => {
-        const updates: Partial<CommandEntity> = { name };
+        if (!name.trim()) {
+            showToast('Name cannot be empty', 'warning');
+            return;
+        }
+        if (existingNames.includes(name.trim())) {
+            showToast(`Name "${name}" already exists in this group.`, 'warning');
+            return;
+        }
+
+        const updates: Partial<CommandEntity> = { name: name.trim() };
         if (isCommand) {
             const cmdUpdates = updates as Partial<CommandItem>;
             if (inputStateRef.current) {

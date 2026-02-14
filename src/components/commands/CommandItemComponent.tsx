@@ -3,6 +3,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { Play, FileText, GripVertical } from 'lucide-react';
 import { CommandItem } from '../../types/command';
+import { useToast } from '../../context/ToastContext';
 
 interface Props {
     item: CommandItem;
@@ -15,6 +16,8 @@ interface Props {
 }
 
 export const CommandItemComponent = ({ item, onEdit, onSend, onContextMenu, disabled, selected, onSelect }: Props) => {
+    const { showToast } = useToast();
+
     // Standard Sortable (for dragging THIS item)
     const {
         attributes,
@@ -97,15 +100,22 @@ export const CommandItemComponent = ({ item, onEdit, onSend, onContextMenu, disa
             </div>
 
             {/* Send Button */}
-            <div className={`transition-opacity relative z-20 ${disabled ? 'opacity-0 group-hover:opacity-40' : 'opacity-0 group-hover:opacity-100'}`}>
+            <div className={`transition-opacity relative z-20 ${disabled || (!item.payload && (!item.tokens || Object.keys(item.tokens).length === 0)) ? 'opacity-0 group-hover:opacity-40' : 'opacity-0 group-hover:opacity-100'}`}>
                 <button
-                    className={`p-1 rounded transition-colors ${disabled
-                        ? 'text-[#666] hover:bg-[#333] hover:text-[#999]'
+                    className={`p-1 rounded transition-colors ${disabled || (!item.payload && (!item.tokens || Object.keys(item.tokens).length === 0))
+                        ? 'text-[#666] hover:bg-[#333] hover:text-[#999] cursor-not-allowed'
                         : 'hover:bg-[#007acc] text-[#cccccc] hover:text-white'}`}
                     title={disabled ? "Click to Connect & Send" : "Send Command"}
                     onClick={(e) => {
                         e.stopPropagation();
                         // Always allow click, parent handles auto-connect logic
+                        // But if empty, parent handles blocking too.
+                        const isEmpty = !item.payload && (!item.tokens || Object.keys(item.tokens).length === 0);
+                        if (isEmpty) {
+                            showToast('发送内容不能为空', 'warning');
+                            return;
+                        }
+
                         console.log('Send button clicked via UI', item.name);
                         onSend(item);
                     }}

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'node:path'
 // Lazy load SerialPort to improve startup speed
 // import { SerialPort as SerialPortType } from 'serialport' // Type only
@@ -177,7 +177,7 @@ function createWindow() {
     titleBarOverlay: {
       color: '#3c3c3c', // Matches --vscode-titlebar
       symbolColor: '#cccccc',
-      height: 30
+      height: 29
     },
   })
 
@@ -374,27 +374,168 @@ function createWindow() {
     return { success: false };
   });
 
-  // Session Management
+  // =============================================
+  // Workspace-based Session Management
+  // =============================================
   const fs = require('fs').promises;
-  const sessionsFile = path.join(app.getPath('userData'), 'sessions.json');
 
-  ipcMain.handle('session:save', async (_event, sessions) => {
+  const workspaceStateFile = path.join(app.getPath('userData'), 'workspace-state.json');
+  const defaultWorkspacePath = path.join(app.getPath('userData'), 'DefaultWorkspace');
+
+  // Get last opened workspace path
+  ipcMain.handle('workspace:getLastWorkspace', async () => {
     try {
-      await fs.writeFile(sessionsFile, JSON.stringify(sessions, null, 2));
+      const data = await fs.readFile(workspaceStateFile, 'utf-8');
+      const state = JSON.parse(data);
+      return { success: true, path: state.lastWorkspace || null };
+    } catch {
+      return { success: true, path: null };
+    }
+  });
+
+  // Get recent workspaces list
+  ipcMain.handle('workspace:getRecentWorkspaces', async () => {
+    try {
+      const data = await fs.readFile(workspaceStateFile, 'utf-8');
+      const state = JSON.parse(data);
+      return { success: true, workspaces: state.recentWorkspaces || [] };
+    } catch {
+      return { success: true, workspaces: [] };
+    }
+  });
+
+  // Save current workspace path and update recent list
+  ipcMain.handle('workspace:setLastWorkspace', async (_event: any, wsPath: string | null) => {
+    try {
+      let state: any = { lastWorkspace: null, recentWorkspaces: [] };
+      try {
+        const data = await fs.readFile(workspaceStateFile, 'utf-8');
+        state = JSON.parse(data);
+      } catch { /* ignore */ }
+
+      if (wsPath) {
+        state.lastWorkspace = wsPath;
+        // Update recent list: remove if exists, add to front, limit to 10
+        const currentRecent = state.recentWorkspaces || [];
+        const filtered = currentRecent.filter((p: string) => p !== wsPath);
+        state.recentWorkspaces = [wsPath, ...filtered].slice(0, 10);
+      } else {
+        state.lastWorkspace = null;
+      }
+
+      await fs.writeFile(workspaceStateFile, JSON.stringify(state, null, 2));
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('session:load', async () => {
+  // Open folder picker dialog
+  ipcMain.handle('workspace:openFolder', async () => {
+    const result = await dialog.showOpenDialog(win!, {
+      properties: ['openDirectory'],
+      title: 'Select Workspace Folder',
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+    return { success: true, path: result.filePaths[0] };
+  });
+
+  // List all .json session files in workspace
+  ipcMain.handle('workspace:listSessions', async (_event: any, wsPath: string) => {
     try {
-      const data = await fs.readFile(sessionsFile, 'utf-8');
-      return { success: true, data: JSON.parse(data) };
+      await fs.mkdir(wsPath, { recursive: true });
+      const files: string[] = await fs.readdir(wsPath);
+      const sessions: any[] = [];
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+        try {
+          const content = await fs.readFile(path.join(wsPath, file), 'utf-8');
+          const config = JSON.parse(content);
+          if (config && config.id && config.type) {
+            sessions.push(config);
+          }
+        } catch { /* skip invalid files */ }
+      }
+      return { success: true, data: sessions };
     } catch (error: any) {
-      if (error.code === 'ENOENT') return { success: true, data: [] };
       return { success: false, error: error.message };
     }
+  });
+
+  // Save a single session config to workspace
+  ipcMain.handle('workspace:saveSession', async (_event: any, wsPath: string, config: any) => {
+    try {
+      await fs.mkdir(wsPath, { recursive: true });
+      const safeName = config.name.replace(/[<>:"/\\|?*]/g, '_');
+      const filePath = path.join(wsPath, `${safeName}.json`);
+      await fs.writeFile(filePath, JSON.stringify(config, null, 2));
+      return { success: true, filePath };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Delete a session file from workspace
+  ipcMain.handle('workspace:deleteSession', async (_event: any, wsPath: string, config: any) => {
+    try {
+      const safeName = config.name.replace(/[<>:"/\\|?*]/g, '_');
+      const filePath = path.join(wsPath, `${safeName}.json`);
+      await fs.unlink(filePath);
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Rename a session file in workspace
+  ipcMain.handle('workspace:renameSession', async (_event: any, wsPath: string, oldName: string, newName: string) => {
+    try {
+      const safeOld = oldName.replace(/[<>:"/\\|?*]/g, '_');
+      const safeNew = newName.replace(/[<>:"/\\|?*]/g, '_');
+      const oldPath = path.join(wsPath, `${safeOld}.json`);
+      const newPath = path.join(wsPath, `${safeNew}.json`);
+      await fs.rename(oldPath, newPath);
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Migrate old sessions.json to default workspace (one-time)
+  const oldSessionsFile = path.join(app.getPath('userData'), 'sessions.json');
+  ipcMain.handle('workspace:migrateOldSessions', async () => {
+    try {
+      const data = await fs.readFile(oldSessionsFile, 'utf-8');
+      const sessions = JSON.parse(data);
+      if (Array.isArray(sessions) && sessions.length > 0) {
+        await fs.mkdir(defaultWorkspacePath, { recursive: true });
+        for (const config of sessions) {
+          if (!config || !config.name) continue;
+          const safeName = config.name.replace(/[<>:"/\\|?*]/g, '_');
+          await fs.writeFile(
+            path.join(defaultWorkspacePath, `${safeName}.json`),
+            JSON.stringify(config, null, 2)
+          );
+        }
+        // Rename old file so we don't migrate again
+        await fs.rename(oldSessionsFile, oldSessionsFile + '.bak');
+        return { success: true, migrated: sessions.length, path: defaultWorkspacePath };
+      }
+      return { success: false, migrated: 0 };
+    } catch {
+      return { success: false, migrated: 0 };
+    }
+  });
+
+  // Legacy session API (kept for backward compat, no-ops)
+  ipcMain.handle('session:save', async () => ({ success: true }));
+  ipcMain.handle('session:load', async () => ({ success: true, data: [] }));
+
+  // Open URL in system browser
+  ipcMain.handle('shell:openExternal', async (_event: any, url: string) => {
+    await shell.openExternal(url);
   });
 
   // Test active push message to Renderer-process.
@@ -696,6 +837,36 @@ ipcMain.handle('tcp:write', async (_event, { port, data }) => {
 ipcMain.handle('app:version', () => {
   return app.getVersion();
 });
+
+// App-specific resource stats (process-level, not system-wide)
+let lastCpuUsage = process.cpuUsage();
+let lastCpuTime = Date.now();
+
+ipcMain.handle('system:stats', async () => {
+  // Memory: app process memory
+  const mem = process.memoryUsage();
+  const memUsedMB = Math.round(mem.rss / 1024 / 1024); // Resident Set Size
+
+  // CPU: app process CPU usage
+  const currentCpuUsage = process.cpuUsage(lastCpuUsage);
+  const currentTime = Date.now();
+  const elapsedMs = currentTime - lastCpuTime;
+
+  // cpuUsage returns microseconds, convert to percentage
+  const totalCpuUs = currentCpuUsage.user + currentCpuUsage.system;
+  // Percentage of a single core. For multi-core, this can exceed 100%.
+  // We normalize to single-core percentage for simplicity.
+  const cpuPercent = elapsedMs > 0 ? Math.min(100, Math.round((totalCpuUs / 1000) / elapsedMs * 100)) : 0;
+
+  lastCpuUsage = process.cpuUsage();
+  lastCpuTime = currentTime;
+
+  return {
+    cpu: cpuPercent,
+    memUsed: memUsedMB,
+  };
+});
+
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

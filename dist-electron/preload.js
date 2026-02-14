@@ -91,6 +91,17 @@ electron.contextBridge.exposeInMainWorld("sessionAPI", {
   save: (sessions) => electron.ipcRenderer.invoke("session:save", sessions),
   load: () => electron.ipcRenderer.invoke("session:load")
 });
+electron.contextBridge.exposeInMainWorld("workspaceAPI", {
+  getLastWorkspace: () => electron.ipcRenderer.invoke("workspace:getLastWorkspace"),
+  setLastWorkspace: (wsPath) => electron.ipcRenderer.invoke("workspace:setLastWorkspace", wsPath),
+  openFolder: () => electron.ipcRenderer.invoke("workspace:openFolder"),
+  listSessions: (wsPath) => electron.ipcRenderer.invoke("workspace:listSessions", wsPath),
+  saveSession: (wsPath, config) => electron.ipcRenderer.invoke("workspace:saveSession", wsPath, config),
+  deleteSession: (wsPath, config) => electron.ipcRenderer.invoke("workspace:deleteSession", wsPath, config),
+  renameSession: (wsPath, oldName, newName) => electron.ipcRenderer.invoke("workspace:renameSession", wsPath, oldName, newName),
+  getRecentWorkspaces: () => electron.ipcRenderer.invoke("workspace:getRecentWorkspaces"),
+  migrateOldSessions: () => electron.ipcRenderer.invoke("workspace:migrateOldSessions")
+});
 electron.contextBridge.exposeInMainWorld("com0comAPI", {
   exec: (command) => electron.ipcRenderer.invoke("com0com:exec", command),
   installDriver: () => electron.ipcRenderer.invoke("com0com:install")
@@ -112,6 +123,7 @@ electron.contextBridge.exposeInMainWorld("updateAPI", {
   download: () => electron.ipcRenderer.invoke("update:download"),
   install: () => electron.ipcRenderer.invoke("update:install"),
   getVersion: () => electron.ipcRenderer.invoke("app:version"),
+  getStats: () => electron.ipcRenderer.invoke("system:stats"),
   onStatus: (callback) => {
     const listener = (_, data) => callback(data);
     electron.ipcRenderer.on("update:status", listener);
@@ -122,4 +134,7 @@ electron.contextBridge.exposeInMainWorld("updateAPI", {
     electron.ipcRenderer.on("update:progress", listener);
     return () => electron.ipcRenderer.off("update:progress", listener);
   }
+});
+electron.contextBridge.exposeInMainWorld("shellAPI", {
+  openExternal: (url) => electron.ipcRenderer.invoke("shell:openExternal", url)
 });

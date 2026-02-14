@@ -58,11 +58,27 @@ declare global {
             onData: (callback: (port: number, data: Uint8Array) => void) => () => void;
         }
         updateAPI: {
+            getVersion: () => Promise<string>;
+            getStats: () => Promise<{ cpu: number; memUsed: number }>;
             check: () => Promise<any>;
             download: () => Promise<any>;
             install: () => void;
             onStatus: (callback: (data: any) => void) => () => void;
             onProgress: (callback: (progress: any) => void) => () => void;
+        }
+        shellAPI: {
+            openExternal: (url: string) => Promise<void>;
+        }
+        workspaceAPI: {
+            getLastWorkspace: () => Promise<{ success: boolean; path: string | null }>;
+            setLastWorkspace: (wsPath: string | null) => Promise<{ success: boolean }>;
+            openFolder: () => Promise<{ success: boolean; canceled?: boolean; path?: string }>;
+            listSessions: (wsPath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+            saveSession: (wsPath: string, config: any) => Promise<{ success: boolean; filePath?: string; error?: string }>;
+            deleteSession: (wsPath: string, config: any) => Promise<{ success: boolean; error?: string }>;
+            renameSession: (wsPath: string, oldName: string, newName: string) => Promise<{ success: boolean; error?: string }>;
+            getRecentWorkspaces: () => Promise<{ success: boolean; workspaces: string[] }>;
+            migrateOldSessions: () => Promise<{ success: boolean; migrated: number; path?: string }>;
         }
     }
 }

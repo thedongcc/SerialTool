@@ -11,6 +11,9 @@ export const useSessionManager = () => {
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
     const [savedSessions, setSavedSessions] = useState<SessionConfig[]>([]);
     const [ports, setPorts] = useState<SerialPortInfo[]>([]);
+    const [workspacePath, setWorkspacePath] = useState<string | null>(null);
+    const workspacePathRef = useRef<string | null>(null);
+    const [recentWorkspaces, setRecentWorkspaces] = useState<string[]>([]);
 
     // We'll use a ref to track registered listeners to avoid duplicates/churn
     const registeredSessions = useRef<Set<string>>(new Set());
@@ -351,11 +354,11 @@ export const useSessionManager = () => {
         setSessions(prev => [...prev, newSession]);
         setActiveSessionId(newId);
 
-        // Persist immediately
+        // Persist immediately to workspace
         const newSaved = [...savedSessions, baseConfig];
         setSavedSessions(newSaved);
-        if (window.sessionAPI) {
-            await window.sessionAPI.save(newSaved);
+        if (workspacePathRef.current && window.workspaceAPI) {
+            await window.workspaceAPI.saveSession(workspacePathRef.current, baseConfig);
         }
 
         return newId;
@@ -399,8 +402,8 @@ export const useSessionManager = () => {
         // Persist
         const newSaved = [...savedSessions, newConfig as SessionConfig];
         setSavedSessions(newSaved);
-        if (window.sessionAPI) {
-            await window.sessionAPI.save(newSaved);
+        if (workspacePathRef.current && window.workspaceAPI) {
+            await window.workspaceAPI.saveSession(workspacePathRef.current, newConfig);
         }
 
         return newId;
@@ -543,51 +546,79 @@ export const useSessionManager = () => {
     // This dependency array is a bit cheat-y but works for detecting addition of sessions.
     // ideally we have a separate component or hook per session. But global manager is okay for now.
 
-    // --- Persistence ---
-    const loadSavedSessions = useCallback(async () => {
-        if (!window.sessionAPI) return;
-        const result = await window.sessionAPI.load();
+    // --- Persistence (Workspace-based) ---
+    const loadSessionsFromWorkspace = useCallback(async (wsPath: string) => {
+        if (!window.workspaceAPI) return;
+        const result = await window.workspaceAPI.listSessions(wsPath);
         if (result.success && result.data) {
-            // Migration: Ensure all loaded sessions have a type and migrate MQTT brokerUrl
-            const migrated = result.data.map(s => {
-                const session = { ...s, type: s.type || 'serial' };
-                if (session.type === 'mqtt' && (session as any).brokerUrl) {
-                    const url = (session as any).brokerUrl;
-                    const parts = url.split('://');
-                    const protocol = parts[0] || 'tcp';
-                    const remaining = parts[1] || url;
-                    const [host, port] = remaining.split(':');
-
-                    return {
-                        ...session,
-                        protocol,
-                        host,
-                        port: parseInt(port) || 1883,
-                        autoReconnect: true,
-                        connectTimeout: 30
-                    };
-                }
-                return session;
-            });
-            setSavedSessions(migrated);
+            setSavedSessions(result.data);
         }
     }, []);
 
+    const loadRecentWorkspaces = useCallback(async () => {
+        if (!window.workspaceAPI) return;
+        const result = await window.workspaceAPI.getRecentWorkspaces();
+        if (result.success) {
+            setRecentWorkspaces(result.workspaces);
+        }
+    }, []);
+
+    const openWorkspace = useCallback(async (wsPath: string) => {
+        setWorkspacePath(wsPath);
+        workspacePathRef.current = wsPath;
+        // Persist as last workspace (also updates recent list in main process)
+        await window.workspaceAPI?.setLastWorkspace(wsPath);
+        // Load sessions
+        await loadSessionsFromWorkspace(wsPath);
+        // Refresh recent list
+        await loadRecentWorkspaces();
+    }, [loadSessionsFromWorkspace, loadRecentWorkspaces]);
+
+    const closeWorkspace = useCallback(() => {
+        // Disconnect all sessions
+        sessions.forEach(s => {
+            if (s.isConnected) disconnectSession(s.id);
+        });
+        setSessions([]);
+        setSavedSessions([]);
+        setActiveSessionId(null);
+        setWorkspacePath(null);
+        workspacePathRef.current = null;
+        window.workspaceAPI?.setLastWorkspace(null);
+    }, [sessions, disconnectSession]);
+
+    const browseAndOpenWorkspace = useCallback(async () => {
+        if (!window.workspaceAPI) return;
+        const result = await window.workspaceAPI.openFolder();
+        if (result.success && result.path) {
+            await openWorkspace(result.path);
+        }
+    }, [openWorkspace]);
+
     const saveSession = useCallback(async (session: SessionConfig) => {
-        if (!window.sessionAPI) return;
+        if (!workspacePathRef.current || !window.workspaceAPI) return;
 
         // Check if exists, update or add
         let newSaved = [...savedSessions];
         const idx = newSaved.findIndex(s => s.id === session.id);
+        const oldName = idx >= 0 ? newSaved[idx].name : null;
+
         if (idx >= 0) {
             newSaved[idx] = session;
         } else {
             newSaved.push(session);
         }
 
-        const result = await window.sessionAPI.save(newSaved);
+        // Optimistic update
+        setSavedSessions(newSaved);
+
+        // Rename file if needed
+        if (oldName && oldName !== session.name) {
+            await window.workspaceAPI.renameSession(workspacePathRef.current, oldName, session.name);
+        }
+
+        const result = await window.workspaceAPI.saveSession(workspacePathRef.current, session);
         if (result.success) {
-            setSavedSessions(newSaved);
             addLog(session.id, 'INFO', `Session saved as ${session.name}`);
         } else {
             console.error('Failed to save session:', result.error);
@@ -595,13 +626,14 @@ export const useSessionManager = () => {
     }, [savedSessions, addLog]);
 
     const deleteSession = useCallback(async (sessionId: string) => {
-        if (!window.sessionAPI) return;
+        if (!workspacePathRef.current || !window.workspaceAPI) return;
 
-        const newSaved = savedSessions.filter(s => s.id !== sessionId);
-        const result = await window.sessionAPI.save(newSaved);
+        const session = savedSessions.find(s => s.id === sessionId);
+        if (!session) return;
 
+        const result = await window.workspaceAPI.deleteSession(workspacePathRef.current, session);
         if (result.success) {
-            setSavedSessions(newSaved);
+            setSavedSessions(prev => prev.filter(s => s.id !== sessionId));
         } else {
             console.error('Failed to delete session:', result.error);
         }
@@ -632,7 +664,7 @@ export const useSessionManager = () => {
     const updateSessionConfig = useCallback(async (sessionId: string, updates: Partial<SessionConfig>) => {
         console.log(`[SessionManager] Updating config for ${sessionId}`, updates);
         // 1. Update runtime session
-        updateSession(sessionId, (prev) => ({ config: { ...prev.config, ...updates } }));
+        updateSession(sessionId, (prev) => ({ config: { ...prev.config, ...updates } as any }));
 
         // 2. Check if it's a saved session and update persistence
         // We use the functional state of savedSessions to ensure we have latest? 
@@ -641,16 +673,19 @@ export const useSessionManager = () => {
         const isSaved = savedSessions.some(s => s.id === sessionId);
 
         if (session && isSaved) {
-            const newConfig = { ...session.config, ...updates };
-            // We can reuse saveSession logic but saveSession expects full config.
-            // Also saveSession updates state.
+            const oldName = session.config.name;
+            const newName = updates.name;
 
-            // Optimized save:
-            const newSaved = savedSessions.map(s => s.id === sessionId ? { ...s, ...updates } : s);
-            setSavedSessions(newSaved); // Optimistic update
+            const updatedConfig = { ...session.config, ...updates } as SessionConfig;
+            const newSaved = savedSessions.map(s => s.id === sessionId ? { ...s, ...updates } as SessionConfig : s);
+            setSavedSessions(newSaved);
 
-            if (window.sessionAPI) {
-                await window.sessionAPI.save(newSaved);
+            if (workspacePathRef.current && window.workspaceAPI) {
+                // Check if name changed and rename file
+                if (newName && newName !== oldName) {
+                    await window.workspaceAPI.renameSession(workspacePathRef.current, oldName, newName);
+                }
+                await window.workspaceAPI.saveSession(workspacePathRef.current, updatedConfig);
             }
         }
     }, [sessions, savedSessions, updateSession]);
@@ -666,18 +701,44 @@ export const useSessionManager = () => {
     }, [sessions, updateSessionConfig]);
 
 
-    // Initial load
+    // Initial load — workspace-based
     useEffect(() => {
         listPorts();
-        loadSavedSessions();
         const interval = setInterval(listPorts, 5000);
 
-        // Virtual port subscription removed
+        // Initialize workspace
+        const initWorkspace = async () => {
+            if (!window.workspaceAPI) return;
+
+            // Load recent list first
+            await loadRecentWorkspaces();
+
+            // Try migration from old sessions.json (but don't auto-open unless user had no workspace before??)
+            // Actually, for "No Default Workspace" request, we should only migrate if explicitly asked, 
+            // OR we migrate silently to default location but DONT open it.
+            // But the migration handler returns the path.
+            // Let's stick to: Only open if lastWorkspace is set.
+            const lastWs = await window.workspaceAPI.getLastWorkspace();
+            if (lastWs.success && lastWs.path) {
+                await openWorkspace(lastWs.path);
+            } else {
+                // First run or no workspace set.
+                // Do we migrate? If we migrate, we create "DefaultWorkspace".
+                // If we don't open it, user sees empty state.
+                // Let's migrate silently so data isn't lost, but NOT open it.
+                await window.workspaceAPI.migrateOldSessions();
+
+                // If migration happened, it might be good to add valid default to recent list?
+                // But user wants "No default workspace".
+                // So we just stay empty.
+            }
+        };
+        initWorkspace();
 
         return () => {
             clearInterval(interval);
         };
-    }, [listPorts, loadSavedSessions]);
+    }, [listPorts, openWorkspace, loadRecentWorkspaces]);
 
 
 
@@ -687,13 +748,15 @@ export const useSessionManager = () => {
         setActiveSessionId,
         savedSessions,
         ports,
+        workspacePath,
+        recentWorkspaces,
         createSession,
         duplicateSession,
         closeSession,
         connectSession,
         disconnectSession,
         writeToSession,
-        updateSessionConfig, // Use the scoped function
+        updateSessionConfig,
         updateUIState,
         clearLogs,
         publishMqtt,
@@ -701,11 +764,12 @@ export const useSessionManager = () => {
         saveSession,
         deleteSession,
         openSavedSession,
+        openWorkspace,
+        closeWorkspace,
+        browseAndOpenWorkspace,
         reorderSessions: useCallback(async (newOrder: SessionConfig[]) => {
             setSavedSessions(newOrder);
-            if (window.sessionAPI) {
-                await window.sessionAPI.save(newOrder);
-            }
-        }, [savedSessions])
+            // Re-save all in workspace (order doesn't affect files, but we update state)
+        }, [])
     };
 };

@@ -1,5 +1,5 @@
 import { type ReactNode, useState, useRef, useEffect, useMemo } from 'react';
-import { Files, Search, GitGraph, Box, Settings, User, Monitor, Check } from 'lucide-react';
+import { Files, Search, GitGraph, Box, Settings, Monitor, Check } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { usePluginManager } from '../../context/PluginContext';
 import {
@@ -235,12 +235,8 @@ export const ActivityBar = ({ activeView, onViewChange, onOpenSettings }: Activi
                 </div>
             </DndContext>
 
-            {/* Bottom Actions (User, Settings) - Not sortable for now */}
+            {/* Bottom Actions (Settings) */}
             <div className="flex flex-col gap-0">
-                <ActivityItem
-                    icon={<User size={24} strokeWidth={1.5} />}
-                    onClick={() => alert('User profiles not implemented yet')}
-                />
 
                 <div className="relative" ref={menuRef}>
                     <ActivityItem

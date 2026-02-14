@@ -10,6 +10,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { SerialToken } from './SerialTokenExtension';
 import { SuggestionExtension, getSuggestionOptions } from './SuggestionExtension';
 import { SERIAL_TOKEN_CLICK_EVENT } from './SerialTokenComponent';
+import { useToast } from '../../context/ToastContext';
 
 interface SerialInputProps {
     onSend: (data: string | Uint8Array, mode: 'text' | 'hex') => void;
@@ -41,8 +42,10 @@ export const SerialInput = ({
     onStateChange,
     hideExtras = false
 }: SerialInputProps) => {
+    const { showToast } = useToast();
     const [mode, setMode] = useState<'text' | 'hex'>(initialMode);
     const [lineEnding, setLineEnding] = useState<'' | '\n' | '\r' | '\r\n'>(initialLineEnding);
+    const [isEmpty, setIsEmpty] = useState(true);
     const [popover, setPopover] = useState<{ id: string; type: string; x: number; y: number; pos: number } | null>(null);
     const [isTimerRunning, setIsTimerRunning] = useState(false);
     const [timerInterval, setTimerInterval] = useState(1000);
@@ -74,7 +77,8 @@ export const SerialInput = ({
         extensions,
         content: initialHTML || initialContent,
         editorProps,
-        onCreate: () => {
+        onCreate: ({ editor }) => {
+            setIsEmpty(editor.isEmpty);
             // Mark ready after initial render cycle to skip initial update
             setTimeout(() => { isReadyRef.current = true; }, 0);
         },
@@ -82,6 +86,9 @@ export const SerialInput = ({
             // Sync state to parent
             // Avoid syncing if no document change (e.g. selection only or initial parse)
             // Also ensure we are "ready" to avoid initial load trigger
+            const currentEmpty = editor.isEmpty;
+            if (currentEmpty !== isEmpty) setIsEmpty(currentEmpty);
+
             if ((!transaction.docChanged && !transaction.scrolledIntoView) || !isReadyRef.current) {
                 return;
             }
@@ -207,7 +214,10 @@ export const SerialInput = ({
             onConnectRequest?.();
             return;
         }
-        if (!editor) return;
+        if (!editor || editor.isEmpty) {
+            showToast('发送内容不能为空', 'warning');
+            return;
+        }
 
         const html = editor.getHTML();
         const text = editor.getText();
@@ -280,10 +290,16 @@ export const SerialInput = ({
                             <button
                                 className={`flex items-center gap-1 px-2 py-0.5 text-[12px] rounded-sm transition-colors cursor-pointer whitespace-nowrap ${isTimerRunning
                                     ? 'bg-[#007acc] text-white hover:bg-[#0062a3]'
-                                    : 'bg-[#3c3c3c] text-[#cccccc] hover:bg-[#4c4c4c]'
+                                    : ((!isTimerRunning && isEmpty) ? 'bg-[#3c3c3c] text-[#666] cursor-not-allowed' : 'bg-[#3c3c3c] text-[#cccccc] hover:bg-[#4c4c4c]')
                                     }`}
-                                onClick={() => setIsTimerRunning(!isTimerRunning)}
-                                title={isTimerRunning ? 'Stop Timed Send' : 'Start Timed Send'}
+                                onClick={() => {
+                                    if (!isTimerRunning && isEmpty) {
+                                        showToast('发送内容不能为空', 'warning');
+                                        return;
+                                    }
+                                    setIsTimerRunning(!isTimerRunning);
+                                }}
+                                title={isTimerRunning ? 'Stop Timed Send' : (isEmpty ? 'Type message to start timer' : 'Start Timed Send')}
                             >
                                 <Timer size={14} />
                                 <span>{isTimerRunning ? 'Stop' : 'Timed'}</span>
@@ -326,9 +342,11 @@ export const SerialInput = ({
 
                 {!hideExtras && (
                     <button
-                        className={`nav-item px-3 flex flex-row items-center justify-center gap-2 rounded-sm transition-colors ${isConnected ? 'bg-[#007acc] hover:bg-[#0062a3] text-white' : 'bg-[#3c3c3c] bg-opacity-50 text-[#666] hover:bg-[#4c4c4c] cursor-pointer'}`}
+                        className={`nav-item px-3 flex flex-row items-center justify-center gap-2 rounded-sm transition-colors ${isConnected
+                            ? (isEmpty ? 'bg-[#3c3c3c] text-[#666] cursor-not-allowed' : 'bg-[#007acc] hover:bg-[#0062a3] text-white')
+                            : 'bg-[#3c3c3c] bg-opacity-50 text-[#666] hover:bg-[#4c4c4c] cursor-pointer'}`}
                         onClick={() => handleSend()}
-                        title={isConnected ? 'Send Data' : 'Open Serial Connection'}
+                        title={isConnected ? (isEmpty ? 'Type message to send' : 'Send Data') : 'Open Serial Connection'}
                     >
                         <Send size={16} />
                         <span className="text-[13px] font-medium">Send</span>

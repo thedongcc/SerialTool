@@ -22,7 +22,7 @@ div[data-direction="vertical"]:hover {
   --vscode-bg: #1e1e1e;
   --vscode-sidebar: #252526;
   --vscode-activitybar: #333333;
-  --vscode-statusbar: #007acc;
+  --vscode-statusbar: #252526;
   --vscode-statusbar-debugging: #cc6633;
   --vscode-titlebar: #3c3c3c;
   --vscode-panel: #1e1e1e;
@@ -71,7 +71,7 @@ div[data-direction="vertical"]:hover {
   --vscode-bg: #ffffff;
   --vscode-sidebar: #f3f3f3;
   --vscode-activitybar: #2c2c2c;
-  --vscode-statusbar: #007acc;
+  --vscode-statusbar: #e8e8e8;
   --vscode-titlebar: #dddddd;
   --vscode-panel: #ffffff;
   --vscode-border: #e4e4e4;

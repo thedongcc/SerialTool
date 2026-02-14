@@ -100,6 +100,18 @@ contextBridge.exposeInMainWorld('sessionAPI', {
   load: () => ipcRenderer.invoke('session:load')
 });
 
+contextBridge.exposeInMainWorld('workspaceAPI', {
+  getLastWorkspace: () => ipcRenderer.invoke('workspace:getLastWorkspace'),
+  setLastWorkspace: (wsPath: string | null) => ipcRenderer.invoke('workspace:setLastWorkspace', wsPath),
+  openFolder: () => ipcRenderer.invoke('workspace:openFolder'),
+  listSessions: (wsPath: string) => ipcRenderer.invoke('workspace:listSessions', wsPath),
+  saveSession: (wsPath: string, config: any) => ipcRenderer.invoke('workspace:saveSession', wsPath, config),
+  deleteSession: (wsPath: string, config: any) => ipcRenderer.invoke('workspace:deleteSession', wsPath, config),
+  renameSession: (wsPath: string, oldName: string, newName: string) => ipcRenderer.invoke('workspace:renameSession', wsPath, oldName, newName),
+  getRecentWorkspaces: () => ipcRenderer.invoke('workspace:getRecentWorkspaces'),
+  migrateOldSessions: () => ipcRenderer.invoke('workspace:migrateOldSessions'),
+});
+
 contextBridge.exposeInMainWorld('com0comAPI', {
   exec: (command: string) => ipcRenderer.invoke('com0com:exec', command),
   installDriver: () => ipcRenderer.invoke('com0com:install')
@@ -122,6 +134,7 @@ contextBridge.exposeInMainWorld('updateAPI', {
   download: () => ipcRenderer.invoke('update:download'),
   install: () => ipcRenderer.invoke('update:install'),
   getVersion: () => ipcRenderer.invoke('app:version'),
+  getStats: () => ipcRenderer.invoke('system:stats'),
   onStatus: (callback: (data: any) => void) => {
 
     const listener = (_: any, data: any) => callback(data);
@@ -133,4 +146,8 @@ contextBridge.exposeInMainWorld('updateAPI', {
     ipcRenderer.on('update:progress', listener);
     return () => ipcRenderer.off('update:progress', listener);
   }
+});
+
+contextBridge.exposeInMainWorld('shellAPI', {
+  openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
 });

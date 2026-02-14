@@ -10,6 +10,8 @@ import { ContextMenu } from '../common/ContextMenu';
 import { DndContext, DragEndEvent, PointerSensor, useSensor, useSensors, closestCenter, CollisionDetection, pointerWithin, rectIntersection, useDroppable } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { MessagePipeline } from '../../services/MessagePipeline';
+import { useToast } from '../../context/ToastContext';
+import { generateUniqueName } from '../../utils/commandUtils';
 
 // Helper component for the scrollable list area
 // This needs to be a separate component so it can validly consume useDroppable context from DndContext
@@ -82,6 +84,7 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
         setAllCommands, deleteEntity, deleteEntities, updateEntity, duplicateEntity,
         undo, redo, canUndo, canRedo
     } = useCommandManager();
+    const { showToast } = useToast();
 
     const { activeSessionId, sessions, writeToSession, publishMqtt, connectSession } = useSession();
     const [showMenu, setShowMenu] = useState(false);
@@ -255,6 +258,8 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
         return closestCenter(args);
     };
 
+
+
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
         if (!over) return; // Note: active.id === over.id check is less relevant with alias IDs
@@ -264,25 +269,28 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
             const activeId = active.id.toString();
             const activeItem = commands.find(c => c.id === activeId);
 
-            // If item is already at root, we might want to move it to the END
-            // Or if it was in a group, move to root.
             if (activeItem) {
+                // Check name collision for Root (parentId: undefined)
+                if (activeItem.parentId !== undefined) { // Only check if moving TO root
+                    const hasCollision = commands.some(c =>
+                        c.parentId === undefined && // Target is root
+                        c.name === activeItem.name &&
+                        c.id !== activeItem.id
+                    );
+                    if (hasCollision) {
+                        showToast(`Operation cancelled: A command with name "${activeItem.name}" already exists in the root.`, 'warning');
+                        return;
+                    }
+                }
+
                 if (activeItem.parentId) {
                     // Moving out of group -> Root
                     updateEntity(activeItem.id, { parentId: undefined });
                 } else {
                     // Already at root.
-                    // If we dragged it to the bottom space, logic implies moving to end.
-                    // But arrayMove needs indices.
-                    // If we are at root drop, we usually mean "append".
                     const oldIndex = commands.findIndex(c => c.id === activeId);
                     const newIndex = commands.length - 1;
                     if (oldIndex !== newIndex) {
-                        // BUT commands includes children!
-                        // We need to move it to the end of the COMMANDS array? 
-                        // Or end of Root List?
-                        // setAllCommands expects full list.
-                        // Moving to end of full list is safe way to say "bottom".
                         setAllCommands(arrayMove(commands, oldIndex, newIndex));
                     }
                 }
@@ -307,15 +315,42 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
 
         if (!activeItem || !overItem) return;
 
+        let targetParentId: string | undefined = undefined;
+
+        // Determine target parent
+        if (isDropInto && overItem.type === 'group' && activeItem.parentId !== overItem.id && activeItem.id !== overItem.id) {
+            targetParentId = overItem.id;
+        } else if (activeItem.parentId !== overItem.parentId) {
+            // Cross-level drop
+            targetParentId = overItem.parentId || undefined;
+        } else {
+            // Same level - check collision only if dragging to same level (redundant check but safe)
+            // Actually if same level, name collision is impossible unless we are cloning.
+            // But we are moving. So same name exists (itself).
+            // We only check collision if parent changes.
+        }
+
+        // Check collision if parent changing
+        if (targetParentId !== activeItem.parentId) {
+            const hasCollision = commands.some(c =>
+                c.parentId === targetParentId &&
+                c.name === activeItem.name &&
+                c.id !== activeItem.id
+            );
+            if (hasCollision) {
+                showToast(`Operation cancelled: A command with name "${activeItem.name}" already exists in the destination.`, 'warning');
+                return;
+            }
+        }
+
         // 1. Drop ON Group (via -drop zone) -> Reparent
-        // Or strict strict check if overItem is group and we are treating it as parent
+        // Or strict strict check if we are treating it as parent
         if (isDropInto && overItem.type === 'group' && activeItem.parentId !== overItem.id && activeItem.id !== overItem.id) {
             updateEntity(activeItem.id, { parentId: overItem.id });
             return;
         }
 
         // 2. Cross-level Drop / Standard Sort
-        // If normal sort (not drop zone), we treat overItem as sibling
         if (activeItem.parentId !== overItem.parentId) {
             let newCommands = [...commands];
             const activeIndex = newCommands.findIndex(c => c.id === activeId);
@@ -363,6 +398,10 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
     };
 
     const handleSend = async (cmd: CommandItem) => {
+        // Empty check
+        const isEmpty = !cmd.payload?.trim() && (!cmd.tokens || Object.keys(cmd.tokens).length === 0);
+        if (isEmpty) return;
+
         console.log('handleSend called for:', cmd.name, cmd.payload);
         if (!activeSessionId) {
             console.warn('Send failed: No active session selected');
@@ -381,6 +420,12 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
                     if (success === true) {
                         console.log('Auto-Connect: Connection successful. Stying on page.');
                         // Success!
+                        // return; // Wait, if success, we should proceed to send? 
+                        // The original code returned here? 
+                        // Original: "return;" -> effectively cancelling send after connect?
+                        // "Stying on page" typo -> Staying on page.
+                        // If logic was to just connect, then user has to click again?
+                        // User request didn't mention this. I'll leave existing logic alone for now (it returns).
                         return;
                     } else {
                         console.warn('Auto-Connect: Connection failed (returned false). Navigating to config.');
@@ -407,6 +452,8 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
                 cmd.tokens,
                 cmd.lineEnding || ''
             );
+
+            if (!data || data.length === 0) return;
 
             if (session.config.type === 'mqtt') {
                 // MQTT
@@ -453,12 +500,12 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
                 {
                     label: 'New Command',
                     icon: <FileText size={13} />,
-                    onClick: () => addCommand({ name: 'New Command', payload: '', mode: 'text', tokens: {}, parentId: undefined })
+                    onClick: () => addCommand({ name: generateUniqueName(commands, 'command', undefined), payload: '', mode: 'text', tokens: {}, parentId: undefined })
                 },
                 {
                     label: 'New Group',
                     icon: <FolderPlus size={13} />,
-                    onClick: () => addGroup('New Group')
+                    onClick: () => addGroup(generateUniqueName(commands, 'New Group', undefined))
                 },
                 { separator: true },
                 {
@@ -507,12 +554,12 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
             items.unshift({
                 label: 'New Group',
                 icon: <FolderPlus size={13} />,
-                onClick: () => addGroup('New Group', item.id)
+                onClick: () => addGroup(generateUniqueName(commands, 'New Group', item.id))
             });
             items.unshift({
                 label: 'New Command',
                 icon: <FileText size={13} />,
-                onClick: () => addCommand({ name: 'New Command', payload: '', mode: 'text', tokens: {}, parentId: item.id })
+                onClick: () => addCommand({ name: generateUniqueName(commands, 'command', item.id), payload: '', mode: 'text', tokens: {}, parentId: item.id })
             });
         }
 
@@ -543,7 +590,7 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
                                         <FolderPlus size={14} /> New Group
                                     </div>
                                     <div className="px-3 py-1.5 hover:bg-[#094771] hover:text-white cursor-pointer flex items-center gap-2"
-                                        onClick={() => { addCommand({ name: 'New Command', payload: '', mode: 'text', tokens: {}, parentId: undefined }); setShowMenu(false); }}>
+                                        onClick={() => { addCommand({ name: generateUniqueName(commands, 'command', undefined), payload: '', mode: 'text', tokens: {}, parentId: undefined }); setShowMenu(false); }}>
                                         <FileText size={14} /> New Command
                                     </div>
                                     <div className="h-[1px] bg-[#3c3c3c] my-1" />
@@ -599,6 +646,9 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
                         updateEntity(editingItem.id, updates);
                         setEditingItem(null);
                     }}
+                    existingNames={commands
+                        .filter(c => c.parentId === editingItem.parentId && c.id !== editingItem.id)
+                        .map(c => c.name)}
                 />
             )}
 

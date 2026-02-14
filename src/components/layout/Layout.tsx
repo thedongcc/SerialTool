@@ -40,7 +40,7 @@ export const Layout = ({ children }: { children?: ReactNode }) => {
         <SessionProvider manager={sessionManager}>
             <PluginProvider>
                 <div className="flex flex-col h-screen w-full bg-[var(--vscode-bg)] text-[var(--vscode-fg)] overflow-hidden">
-                    <TitleBar />
+                    <TitleBar workspaceName={sessionManager.workspacePath ? sessionManager.workspacePath.split(/[\\/]/).pop() || null : null} />
                     <div className="flex-1 flex overflow-hidden">
                         <ActivityBar activeView={activeView} onViewChange={setActiveView} onOpenSettings={handleOpenSettings} />
                         <SideBar activeView={activeView} onViewChange={setActiveView} sessionManager={sessionManager} editorLayout={editorLayout} />
