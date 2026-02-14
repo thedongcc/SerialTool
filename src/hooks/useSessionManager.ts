@@ -27,10 +27,43 @@ export const useSessionManager = () => {
     }, []);
 
     const addLog = useCallback((sessionId: string, type: LogEntry['type'], data: string | Uint8Array, crcStatus: LogEntry['crcStatus'] = 'none', topic?: string) => {
-        console.log(`[SM] addLog ${sessionId} [${type}] dataLen=${data.length}`);
+        // console.log(`[SM] addLog ${sessionId} [${type}] dataLen=${data.length}`);
         setSessions(prev => prev.map(s => {
             if (s.id === sessionId) {
-                const newLogs = [...s.logs, { type, data, timestamp: Date.now(), crcStatus, topic }];
+                const logs = s.logs;
+                const lastLog = logs[logs.length - 1];
+                const mergeRepeats = s.config.uiState?.mergeRepeats;
+
+                // Check for duplicate to merge
+                if (mergeRepeats && lastLog && lastLog.type === type && lastLog.topic === topic) {
+                    let isSameData = false;
+                    if (typeof lastLog.data === 'string' && typeof data === 'string') {
+                        isSameData = lastLog.data === data;
+                    } else if (lastLog.data instanceof Uint8Array && data instanceof Uint8Array) {
+                        if (lastLog.data.length === data.length) {
+                            isSameData = true;
+                            for (let i = 0; i < data.length; i++) {
+                                if (lastLog.data[i] !== data[i]) {
+                                    isSameData = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (isSameData) {
+                        // Merge!
+                        const newLogs = [...logs];
+                        newLogs[newLogs.length - 1] = {
+                            ...lastLog,
+                            timestamp: Date.now(), // Update timestamp to latest
+                            repeatCount: (lastLog.repeatCount || 1) + 1
+                        };
+                        return { ...s, logs: newLogs };
+                    }
+                }
+
+                const newLogs = [...logs, { type, data, timestamp: Date.now(), crcStatus, topic }];
                 if (newLogs.length > MAX_LOGS) newLogs.shift();
                 return { ...s, logs: newLogs };
             }
@@ -441,7 +474,43 @@ export const useSessionManager = () => {
 
                             return prev.map(x => x.id === session.id ? { ...x, logs: newLogs } : x);
 
+                            return prev.map(x => x.id === session.id ? { ...x, logs: newLogs } : x);
+
                         } else {
+                            // Check for REPEAT merge (Strict equality check)
+                            // This is for distinct packets that are identical, NOT chunk merging.
+                            const mergeRepeats = s.config.uiState?.mergeRepeats;
+
+                            if (mergeRepeats && lastLog && lastLog.type === 'RX') {
+                                let isSameData = false;
+                                if (typeof lastLog.data === 'string' && typeof data === 'string') {
+                                    isSameData = lastLog.data === data;
+                                } else if (lastLog.data instanceof Uint8Array && (data instanceof Uint8Array || typeof data === 'object')) { // data from API might be Uint8Array
+                                    // Handle data conversion if needed, but here data is from onData which gives Uint8Array
+                                    const newDataArr = data instanceof Uint8Array ? data : new Uint8Array(data);
+                                    if (lastLog.data.length === newDataArr.length) {
+                                        isSameData = true;
+                                        for (let i = 0; i < newDataArr.length; i++) {
+                                            if (lastLog.data[i] !== newDataArr[i]) {
+                                                isSameData = false;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (isSameData) {
+                                    // Merge as Repeat
+                                    const newLogs = [...logs];
+                                    newLogs[newLogs.length - 1] = {
+                                        ...lastLog,
+                                        timestamp: now,
+                                        repeatCount: (lastLog.repeatCount || 1) + 1
+                                    };
+                                    return prev.map(x => x.id === session.id ? { ...x, logs: newLogs } : x);
+                                }
+                            }
+
                             // New Log
                             const isOk = validateRXCRC(data, s.config.rxCRC);
                             const newLogs = [...s.logs, { type: 'RX', data, timestamp: now, crcStatus: s.config.rxCRC.enabled ? (isOk ? 'ok' : 'error') : 'none' } as LogEntry];

@@ -39,6 +39,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
     const { logs, isConnected, config } = session;
     const currentPort = config.type === 'serial' ? config.connection.path : '';
     const scrollRef = useRef<HTMLDivElement>(null);
+    const initialLogCountRef = useRef(logs.length); // Track log count at mount to skip flash on tab switch
 
     const uiState = (config as any).uiState || {};
     console.log('SerialMonitor: uiState loaded', { sessionId: session.id, inputHTML: uiState.inputHTML, inputContent: uiState.inputContent });
@@ -46,7 +47,9 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
     // Display Settings State - Initialize from uiState
     const [viewMode, setViewMode] = useState<'text' | 'hex'>(uiState.viewMode || 'hex');
     const [showTimestamp, setShowTimestamp] = useState(uiState.showTimestamp !== undefined ? uiState.showTimestamp : true);
+    const [showPacketType, setShowPacketType] = useState(uiState.showPacketType !== undefined ? uiState.showPacketType : true);
     const [showDataLength, setShowDataLength] = useState(uiState.showDataLength !== undefined ? uiState.showDataLength : false);
+    const [mergeRepeats, setMergeRepeats] = useState(uiState.mergeRepeats !== undefined ? uiState.mergeRepeats : false);
     const [filterMode, setFilterMode] = useState<'all' | 'rx' | 'tx'>(uiState.filterMode || 'all');
     const [encoding, setEncoding] = useState<'utf-8' | 'gbk' | 'ascii'>(uiState.encoding || 'utf-8');
     const [fontSize, setFontSize] = useState<number>(uiState.fontSize || 13);
@@ -77,31 +80,20 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
         };
     }, []);
 
-    // Save UI state when it changes (Debounced)
+    // Save UI state when it changes (Immediate - no debounce to prevent data loss on close)
     const saveUIState = useCallback((updates: any) => {
         if (!onUpdateConfig) return;
 
-        // Clear existing timer
-        if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-        }
+        const currentUIState = (configRef.current as any).uiState || {};
 
-        saveTimeoutRef.current = setTimeout(() => {
-            const currentUIState = (configRef.current as any).uiState || {};
+        // Field-by-field comparison to prevent useless updates
+        const hasChanges = Object.keys(updates).some(k =>
+            JSON.stringify(updates[k]) !== JSON.stringify(currentUIState[k])
+        );
 
-            // Deep comparison or field-by-field to prevent useless updates
-            const hasChanges = Object.keys(updates).some(k =>
-                JSON.stringify(updates[k]) !== JSON.stringify(currentUIState[k])
-            );
+        if (!hasChanges) return;
 
-            if (!hasChanges) {
-                saveTimeoutRef.current = null;
-                return;
-            }
-
-            onUpdateConfig({ uiState: { ...currentUIState, ...updates } } as any);
-            saveTimeoutRef.current = null;
-        }, 500);
+        onUpdateConfig({ uiState: { ...currentUIState, ...updates } } as any);
     }, [onUpdateConfig]);
 
     // Calculate statistics
@@ -449,6 +441,17 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                                                     />
                                                 </label>
 
+                                                {/* Packet Type */}
+                                                <label className="flex items-center justify-between cursor-pointer group">
+                                                    <span className="text-[11px] text-[#cccccc] group-hover:text-[#ffffff] transition-colors">Packet Type</span>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={showPacketType}
+                                                        onChange={(e) => { setShowPacketType(e.target.checked); saveUIState({ showPacketType: e.target.checked }); }}
+                                                        className="w-3.5 h-3.5 rounded border-[#3c3c3c] bg-[#1e1e1e] text-[#007acc] focus:ring-0 focus:ring-offset-0"
+                                                    />
+                                                </label>
+
                                                 {/* Data Length */}
                                                 <label className="flex items-center justify-between cursor-pointer group">
                                                     <span className="text-[11px] text-[#cccccc] group-hover:text-[#ffffff] transition-colors">Data Length</span>
@@ -456,6 +459,17 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                                                         type="checkbox"
                                                         checked={showDataLength}
                                                         onChange={(e) => { setShowDataLength(e.target.checked); saveUIState({ showDataLength: e.target.checked }); }}
+                                                        className="w-3.5 h-3.5 rounded border-[#3c3c3c] bg-[#1e1e1e] text-[#007acc] focus:ring-0 focus:ring-offset-0"
+                                                    />
+                                                </label>
+
+                                                {/* Merge Repeats */}
+                                                <label className="flex items-center justify-between cursor-pointer group">
+                                                    <span className="text-[11px] text-[#cccccc] group-hover:text-[#ffffff] transition-colors">Merge Repeats</span>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={mergeRepeats}
+                                                        onChange={(e) => { setMergeRepeats(e.target.checked); saveUIState({ mergeRepeats: e.target.checked }); }}
                                                         className="w-3.5 h-3.5 rounded border-[#3c3c3c] bg-[#1e1e1e] text-[#007acc] focus:ring-0 focus:ring-offset-0"
                                                     />
                                                 </label>
@@ -667,27 +681,40 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                 {filteredLogs.map((log, index) => (
                     <div
                         key={index}
-                        className={`flex items-start gap-2.5 mb-1 hover:bg-[#2a2d2e] rounded-sm px-1.5 py-0.5 group relative border-l-2 leading-relaxed ${log.crcStatus === 'error' ? 'bg-[#4b1818]/20 border-[#f48771]' : 'border-transparent'} ${contextMenu?.log === log ? 'bg-[#04395e]/40 ring-1 ring-[#04395e]' : ''}`}
+                        className={`flex items-start gap-1.5 mb-1 hover:bg-[#2a2d2e] rounded-sm px-1.5 py-0.5 group relative border-l-2 leading-relaxed ${index >= initialLogCountRef.current ? 'animate-flash-new' : ''} ${log.crcStatus === 'error' ? 'bg-[#4b1818]/20 border-[#f48771]' : 'border-transparent'} ${contextMenu?.log === log ? 'bg-[#04395e]/40 ring-1 ring-[#04395e]' : ''}`}
                         style={{ fontSize: 'inherit', fontFamily: 'inherit' }}
                         onContextMenu={(e) => handleLogContextMenu(e, log)}
                     >
-                        {showTimestamp && (
-                            <div className="shrink-0 flex items-center h-[1.6em] select-none">
-                                <span className="text-[var(--st-timestamp)] font-mono opacity-90">
-                                    [{formatTimestamp(log.timestamp, themeConfig.timestampFormat).trim()}]
-                                </span>
+                        {/* Timestamp & Repeat Count Container */}
+                        {(showTimestamp || (log.repeatCount && log.repeatCount > 1)) && (
+                            <div className="shrink-0 flex items-center h-[1.6em] select-none gap-1.5">
+                                {showTimestamp && (
+                                    <span className="text-[var(--st-timestamp)] font-mono opacity-90">
+                                        [{formatTimestamp(log.timestamp, themeConfig.timestampFormat || 'HH:mm:ss.SSS').trim()}]
+                                    </span>
+                                )}
+                                {log.repeatCount && log.repeatCount > 1 && (
+                                    <span
+                                        key={log.repeatCount}
+                                        className="h-[18px] flex items-center justify-center text-[11px] leading-none text-[#FFD700] font-bold font-mono bg-[#FFD700]/10 px-1.5 rounded-[3px] border border-[#FFD700]/30 min-w-[24px] shadow-sm backdrop-blur-[1px] animate-flash-gold pt-[1px]"
+                                    >
+                                        x{log.repeatCount}
+                                    </span>
+                                )}
                             </div>
                         )}
-                        <div className="flex items-center gap-1 shrink-0 h-[1.6em]">
-                            <span className={`font-bold select-none px-1 py-[1px] rounded-[3px] w-[36px] text-center text-[11px] leading-tight flex items-center justify-center shadow-sm border border-white/10 tracking-wide
-                                ${log.type === 'TX' ? 'bg-[#007acc] text-white' :
-                                    log.type === 'RX' ? 'bg-[#4ec9b0] text-[#1e1e1e]' :
-                                        'bg-[#454545] text-[#cccccc]'
-                                }`}>
-                                {log.type === 'TX' ? 'TX' : log.type === 'RX' ? 'RX' : 'INFO'}
-                            </span>
+                        <div className="flex items-center gap-1.5 shrink-0 h-[1.6em]">
+                            {showPacketType && (
+                                <span className={`h-[18px] flex items-center justify-center font-bold font-mono select-none px-1 rounded-[3px] w-[36px] text-[11px] leading-none shadow-sm border border-white/10 tracking-wide pt-[1px]
+                                    ${log.type === 'TX' ? 'bg-[#007acc] text-white' :
+                                        log.type === 'RX' ? 'bg-[#4ec9b0] text-[#1e1e1e]' :
+                                            'bg-[#454545] text-[#cccccc]'
+                                    }`}>
+                                    {log.type === 'TX' ? 'TX' : log.type === 'RX' ? 'RX' : 'INFO'}
+                                </span>
+                            )}
                             {showDataLength && (
-                                <span className="font-mono select-none px-1.5 py-[1px] rounded-[3px] min-w-[32px] text-center text-[11px] leading-tight flex items-center justify-center shadow-sm border border-white/10 bg-white/5 text-[#aaaaaa]">
+                                <span className="h-[18px] flex items-center justify-center font-mono select-none px-1.5 rounded-[3px] min-w-[32px] text-[11px] leading-none shadow-sm border border-white/10 bg-white/5 text-[#aaaaaa] pt-[1px]">
                                     {getDataLengthText(log.data)}
                                 </span>
                             )}

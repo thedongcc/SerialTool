@@ -113,8 +113,7 @@ export const CommandEditorDialog = ({ item, onClose, onSave }: Props) => {
                                 onStateChange={(state) => {
                                     inputStateRef.current = state;
                                 }}
-                            // Hide features not needed for editor if possible (timer?)
-                            // SerialInput doesn't have props to hide them individually yet, but it's fine.
+                                hideExtras
                             />
                         </div>
                     )}

@@ -23,6 +23,8 @@ interface SerialInputProps {
     fontFamily?: string;
     onConnectRequest?: () => void;
     onStateChange?: (state: { content: string, html: string, tokens: Record<string, Token>, mode: 'text' | 'hex', lineEnding: '' | '\n' | '\r' | '\r\n' }) => void;
+    /** Hide toolbar, timer, and send button (e.g. for Command Editor) */
+    hideExtras?: boolean;
 }
 
 export const SerialInput = ({
@@ -36,13 +38,15 @@ export const SerialInput = ({
     fontSize = 13,
     fontFamily = 'var(--font-mono)',
     onConnectRequest,
-    onStateChange
+    onStateChange,
+    hideExtras = false
 }: SerialInputProps) => {
     const [mode, setMode] = useState<'text' | 'hex'>(initialMode);
     const [lineEnding, setLineEnding] = useState<'' | '\n' | '\r' | '\r\n'>(initialLineEnding);
-    const [popover, setPopover] = useState<{ id: string; x: number; y: number; pos: number } | null>(null);
-    const [timerEnabled, setTimerEnabled] = useState(false);
+    const [popover, setPopover] = useState<{ id: string; type: string; x: number; y: number; pos: number } | null>(null);
+    const [isTimerRunning, setIsTimerRunning] = useState(false);
     const [timerInterval, setTimerInterval] = useState(1000);
+    const [timerIntervalInput, setTimerIntervalInput] = useState('1000'); // String state for input
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const isReadyRef = useRef(false);
 
@@ -183,7 +187,7 @@ export const SerialInput = ({
         setPopover(null);
     };
 
-    const extractTokens = (): Record<string, Token> => {
+    const extractTokens = useCallback((): Record<string, Token> => {
         if (!editor) return {};
         const json = editor.getJSON();
         const tokensMap: Record<string, Token> = {};
@@ -196,9 +200,9 @@ export const SerialInput = ({
         };
         traverse(json);
         return tokensMap;
-    };
+    }, [editor]);
 
-    const handleSend = () => {
+    const handleSend = useCallback(() => {
         if (!isConnected) {
             onConnectRequest?.();
             return;
@@ -213,35 +217,26 @@ export const SerialInput = ({
         const { data } = MessagePipeline.process(text, html, mode, tokensMap, lineEnding);
 
         onSend(data, mode);
-    };
+    }, [isConnected, editor, onConnectRequest, onSend, mode, lineEnding, extractTokens]);
 
+    // Timer Effect
     useEffect(() => {
-        if (timerEnabled && timerInterval > 0) {
+        if (isTimerRunning && timerInterval > 0) {
             timerRef.current = setInterval(handleSend, timerInterval);
-        } else if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
+        } else {
+            if (timerRef.current) {
+                clearInterval(timerRef.current);
+                timerRef.current = null;
+            }
         }
         return () => { if (timerRef.current) clearInterval(timerRef.current); };
-    }, [timerEnabled, timerInterval]);
+    }, [isTimerRunning, timerInterval, handleSend]);
 
     return (
-        <div className="border-t border-[var(--vscode-border)] bg-[#252526] p-2 flex flex-col gap-2 shrink-0 select-none">
-            <style>
-                {`
-                    input[type=number]::-webkit-inner-spin-button,
-                    input[type=number]::-webkit-outer-spin-button {
-                        -webkit-appearance: none;
-                        margin: 0;
-                    }
-                    input[type=number] {
-                        -moz-appearance: textfield;
-                    }
-                `}
-            </style>
-            {/* Toolbar */}
-            <div className="flex items-center gap-2 h-6">
-                <div className="flex items-center gap-[1px] bg-[#1e1e1e] border border-[#3c3c3c] rounded-sm overflow-hidden p-[2px]">
+        <div className={`${hideExtras ? '' : 'border-t border-[var(--vscode-border)]'} bg-[#252526] p-2 flex flex-col gap-2 shrink-0 select-none`}>
+            {/* Mode Switcher - always visible */}
+            <div className="flex items-center gap-2 h-6 overflow-x-auto scrollbar-none">
+                <div className="shrink-0 flex items-center gap-[1px] bg-[#1e1e1e] border border-[#3c3c3c] rounded-sm overflow-hidden p-[2px]">
                     <button
                         className={`text-[10px] px-1.5 py-0.5 font-mono transition-colors rounded-[1px] ${mode === 'text' ? 'bg-[#007acc] text-white' : 'text-[#666] hover:bg-[#2d2d2d]'}`}
                         onClick={() => setMode('text')}
@@ -255,46 +250,67 @@ export const SerialInput = ({
                         HEX
                     </button>
                 </div>
-                <div className="w-[1px] h-4 bg-[#3c3c3c] mx-1" />
-                <button className="flex items-center gap-1 px-2 py-0.5 bg-[#3c3c3c] hover:bg-[#4c4c4c] text-[12px] text-[#cccccc] rounded-sm transition-colors"
-                    onClick={() => insertToken('crc')}>
-                    <Plus size={14} className="text-[#4ec9b0]" />
-                    <span>Insert CRC</span>
-                </button>
-                <button className="flex items-center gap-1 px-2 py-0.5 bg-[#3c3c3c] hover:bg-[#4c4c4c] text-[12px] text-[#cccccc] rounded-sm transition-colors"
-                    onClick={() => insertToken('flag')}>
-                    <Flag size={14} className="text-[#4ec9b0]" />
-                    <span>Add Flag</span>
-                </button>
-                <button className="flex items-center gap-1 px-2 py-0.5 hover:bg-[#3c3c3c] text-[12px] text-[#cccccc] rounded-sm transition-colors" title="Insert Unix Timestamp"
-                    onClick={() => insertToken('timestamp')}>
-                    <div className="flex items-center justify-center w-[14px] h-[14px] border border-[#4fc1ff] text-[#4fc1ff] text-[9px] font-mono rounded-[2px] leading-none">T</div>
-                    <span>Time</span>
-                </button>
-                <div className="w-[1px] h-4 bg-[#3c3c3c] mx-1" />
-                <button className="flex items-center gap-1 px-2 py-0.5 hover:bg-[#3c3c3c] text-[12px] text-[#cccccc] rounded-sm transition-colors opacity-50 cursor-not-allowed" title="Load File">
-                    <Upload size={14} />
-                    <span>File</span>
-                </button>
-                <div className="flex-1" />
-                <div className="flex items-center gap-2">
-                    <div
-                        className={`w - 4 h - 4 border border - [#cccccc] rounded - sm cursor - pointer flex items - center justify - center ${timerEnabled ? 'bg-[#007acc] border-[#007acc]' : ''} `}
-                        onClick={() => setTimerEnabled(!timerEnabled)}
-                    >
-                        {timerEnabled && <div className="w-2 h-2 bg-white rounded-[1px]" />}
-                    </div>
-                    <Timer size={14} className="text-[#cccccc]" />
-                    <span className="text-[12px] text-[#cccccc]">Timer</span>
-                    {timerEnabled && (
-                        <input
-                            type="number"
-                            className="w-16 h-5 bg-[#1e1e1e] border border-[#3c3c3c] text-[#cccccc] text-[11px] px-1 focus:border-[var(--vscode-focusBorder)] outline-none"
-                            value={timerInterval}
-                            onChange={(e) => setTimerInterval(parseInt(e.target.value) || 1000)}
-                        />
-                    )}
-                </div>
+                {!hideExtras && (
+                    <>
+                        <div className="shrink-0 w-[1px] h-4 bg-[#3c3c3c] mx-1" />
+                        <button className="shrink-0 flex items-center gap-1 px-2 py-0.5 bg-[#3c3c3c] hover:bg-[#4c4c4c] text-[12px] text-[#cccccc] rounded-sm transition-colors whitespace-nowrap"
+                            onClick={() => insertToken('crc')}>
+                            <Plus size={14} className="text-[#4ec9b0]" />
+                            <span>Insert CRC</span>
+                        </button>
+                        <button className="shrink-0 flex items-center gap-1 px-2 py-0.5 bg-[#3c3c3c] hover:bg-[#4c4c4c] text-[12px] text-[#cccccc] rounded-sm transition-colors whitespace-nowrap"
+                            onClick={() => insertToken('flag')}>
+                            <Flag size={14} className="text-[#4ec9b0]" />
+                            <span>Add Flag</span>
+                        </button>
+                        <button className="shrink-0 flex items-center gap-1 px-2 py-0.5 hover:bg-[#3c3c3c] text-[12px] text-[#cccccc] rounded-sm transition-colors whitespace-nowrap" title="Insert Unix Timestamp"
+                            onClick={() => insertToken('timestamp')}>
+                            <div className="flex items-center justify-center w-[14px] h-[14px] border border-[#4fc1ff] text-[#4fc1ff] text-[9px] font-mono rounded-[2px] leading-none">T</div>
+                            <span>Time</span>
+                        </button>
+                        <div className="shrink-0 w-[1px] h-4 bg-[#3c3c3c] mx-1" />
+                        <button className="shrink-0 flex items-center gap-1 px-2 py-0.5 hover:bg-[#3c3c3c] text-[12px] text-[#cccccc] rounded-sm transition-colors opacity-50 cursor-not-allowed whitespace-nowrap" title="Load File">
+                            <Upload size={14} />
+                            <span>File</span>
+                        </button>
+                        <div className="flex-1 shrink min-w-0" />
+                        {/* Timed Send: flat toggle + input */}
+                        <div className="shrink-0 w-[1px] h-4 bg-[#3c3c3c]" />
+                        <div className="shrink-0 flex items-center gap-1.5">
+                            <button
+                                className={`flex items-center gap-1 px-2 py-0.5 text-[12px] rounded-sm transition-colors cursor-pointer whitespace-nowrap ${isTimerRunning
+                                    ? 'bg-[#007acc] text-white hover:bg-[#0062a3]'
+                                    : 'bg-[#3c3c3c] text-[#cccccc] hover:bg-[#4c4c4c]'
+                                    }`}
+                                onClick={() => setIsTimerRunning(!isTimerRunning)}
+                                title={isTimerRunning ? 'Stop Timed Send' : 'Start Timed Send'}
+                            >
+                                <Timer size={14} />
+                                <span>{isTimerRunning ? 'Stop' : 'Timed'}</span>
+                            </button>
+                            <input
+                                type="text"
+                                className="w-12 h-[22px] bg-[#1e1e1e] border border-[#3c3c3c] text-[#cccccc] text-[11px] px-1 rounded-sm focus:border-[var(--vscode-focusBorder)] outline-none text-center font-mono"
+                                value={timerIntervalInput}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setTimerIntervalInput(val);
+                                    if (/^\d+$/.test(val)) {
+                                        const num = parseInt(val, 10);
+                                        if (num > 0) setTimerInterval(Math.max(10, num));
+                                    }
+                                }}
+                                onBlur={() => {
+                                    if (timerIntervalInput === '' || !/^\d+$/.test(timerIntervalInput) || parseInt(timerIntervalInput, 10) <= 0) {
+                                        setTimerIntervalInput(timerInterval.toString());
+                                    }
+                                }}
+                                placeholder="1000"
+                            />
+                            <span className="text-[11px] text-[#666]">ms</span>
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* Input Area */}
@@ -308,14 +324,16 @@ export const SerialInput = ({
                     <EditorContent editor={editor} className="flex-1 outline-none" />
                 </div>
 
-                <button
-                    className={`nav-item px-3 flex flex-row items-center justify-center gap-2 rounded-sm transition-colors ${isConnected ? 'bg-[#007acc] hover:bg-[#0062a3] text-white' : 'bg-[#3c3c3c] bg-opacity-50 text-[#666] hover:bg-[#4c4c4c] cursor-pointer'}`}
-                    onClick={handleSend}
-                    title={isConnected ? "Send Data" : "Open Serial Connection"}
-                >
-                    <Send size={16} />
-                    <span className="text-[13px] font-medium">Send</span>
-                </button>
+                {!hideExtras && (
+                    <button
+                        className={`nav-item px-3 flex flex-row items-center justify-center gap-2 rounded-sm transition-colors ${isConnected ? 'bg-[#007acc] hover:bg-[#0062a3] text-white' : 'bg-[#3c3c3c] bg-opacity-50 text-[#666] hover:bg-[#4c4c4c] cursor-pointer'}`}
+                        onClick={() => handleSend()}
+                        title={isConnected ? 'Send Data' : 'Open Serial Connection'}
+                    >
+                        <Send size={16} />
+                        <span className="text-[13px] font-medium">Send</span>
+                    </button>
+                )}
             </div>
 
             {/* Popover */}

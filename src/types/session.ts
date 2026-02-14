@@ -7,6 +7,7 @@ export interface LogEntry {
     timestamp: number;
     crcStatus?: 'ok' | 'error' | 'none';
     topic?: string;
+    repeatCount?: number;
 }
 
 export type SessionType = 'serial' | 'mqtt' | 'tcp' | 'udp' | 'vnc' | 'rdp' | 'ssh' | 'file' | 'ftp' | 'sftp' | 'settings' | 'graph';
@@ -44,6 +45,7 @@ export interface SerialSessionConfig extends BaseSessionConfig {
         showTimestamp?: boolean;
         autoScroll?: boolean;
         chunkTimeout?: number; // ms to merge consecutive RX chunks
+        mergeRepeats?: boolean; // Merge identical consecutive logs
     };
 }
 

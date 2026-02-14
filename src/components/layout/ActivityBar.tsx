@@ -73,9 +73,7 @@ interface ActivityBarProps {
 
 const DEFAULT_ITEMS = [
     { id: 'explorer', icon: <Files size={24} strokeWidth={1.5} />, label: 'Explorer' },
-    { id: 'search', icon: <Search size={24} strokeWidth={1.5} />, label: 'Search' },
     { id: 'serial', icon: <Monitor size={24} strokeWidth={1.5} />, label: 'Serial Monitor' },
-    { id: 'git', icon: <GitGraph size={24} strokeWidth={1.5} />, label: 'Source Control' },
     { id: 'extensions', icon: <Box size={24} strokeWidth={1.5} />, label: 'Extensions' },
 ];
 
