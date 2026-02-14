@@ -46,6 +46,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
     // Display Settings State - Initialize from uiState
     const [viewMode, setViewMode] = useState<'text' | 'hex'>(uiState.viewMode || 'hex');
     const [showTimestamp, setShowTimestamp] = useState(uiState.showTimestamp !== undefined ? uiState.showTimestamp : true);
+    const [showDataLength, setShowDataLength] = useState(uiState.showDataLength !== undefined ? uiState.showDataLength : false);
     const [filterMode, setFilterMode] = useState<'all' | 'rx' | 'tx'>(uiState.filterMode || 'all');
     const [encoding, setEncoding] = useState<'utf-8' | 'gbk' | 'ascii'>(uiState.encoding || 'utf-8');
     const [fontSize, setFontSize] = useState<number>(uiState.fontSize || 13);
@@ -169,6 +170,16 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
         } catch (e) {
             return new TextDecoder().decode(data);
         }
+    };
+
+    const getDataLengthText = (data: string | Uint8Array) => {
+        let length = 0;
+        if (typeof data === 'string') {
+            length = new TextEncoder().encode(data).length;
+        } else {
+            length = data.length;
+        }
+        return `[${length}B]`;
     };
 
     useEffect(() => {
@@ -438,6 +449,17 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                                                     />
                                                 </label>
 
+                                                {/* Data Length */}
+                                                <label className="flex items-center justify-between cursor-pointer group">
+                                                    <span className="text-[11px] text-[#cccccc] group-hover:text-[#ffffff] transition-colors">Data Length</span>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={showDataLength}
+                                                        onChange={(e) => { setShowDataLength(e.target.checked); saveUIState({ showDataLength: e.target.checked }); }}
+                                                        className="w-3.5 h-3.5 rounded border-[#3c3c3c] bg-[#1e1e1e] text-[#007acc] focus:ring-0 focus:ring-offset-0"
+                                                    />
+                                                </label>
+
                                                 {/* CRC */}
                                                 <div className="space-y-2">
                                                     <div className="flex items-center justify-between">
@@ -656,7 +678,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                                 </span>
                             </div>
                         )}
-                        <div className="shrink-0 flex items-center justify-center h-[1.6em]">
+                        <div className="flex items-center gap-1 shrink-0 h-[1.6em]">
                             <span className={`font-bold select-none px-1 py-[1px] rounded-[3px] w-[36px] text-center text-[11px] leading-tight flex items-center justify-center shadow-sm border border-white/10 tracking-wide
                                 ${log.type === 'TX' ? 'bg-[#007acc] text-white' :
                                     log.type === 'RX' ? 'bg-[#4ec9b0] text-[#1e1e1e]' :
@@ -664,6 +686,11 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                                 }`}>
                                 {log.type === 'TX' ? 'TX' : log.type === 'RX' ? 'RX' : 'INFO'}
                             </span>
+                            {showDataLength && (
+                                <span className="font-mono select-none px-1.5 py-[1px] rounded-[3px] min-w-[32px] text-center text-[11px] leading-tight flex items-center justify-center shadow-sm border border-white/10 bg-white/5 text-[#aaaaaa]">
+                                    {getDataLengthText(log.data)}
+                                </span>
+                            )}
                         </div>
                         <span className={`whitespace-pre-wrap break-all select-text cursor-text flex-1 ${log.type === 'TX' ? 'text-[var(--st-tx-text)]' :
                             log.type === 'RX' ? 'text-[var(--st-rx-text)]' :
