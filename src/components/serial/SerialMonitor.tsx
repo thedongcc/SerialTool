@@ -31,7 +31,7 @@ interface SerialMonitorProps {
 export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig, onInputStateChange, onClearLogs, onConnectRequest }: SerialMonitorProps) => {
     const { config: themeConfig } = useSettings();
     const { logs, isConnected, config } = session;
-    const currentPort = config.connection.path;
+    const currentPort = config.type === 'serial' ? config.connection.path : '';
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const uiState = (config as any).uiState || {};
@@ -268,7 +268,10 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                     {/* Always show connection info if port is selected, otherwise 'No Port' or something? User said "same content as connected". */
                         /* If not connected, we still have config.connection.path etc. from session state. */
                     }
-                    {`${currentPort || 'No Port'}-${config.connection.baudRate}-${config.connection.dataBits}-${config.connection.parity === 'none' ? 'N' : config.connection.parity.toUpperCase()}-${config.connection.stopBits}`}
+                    {config.type === 'serial' ?
+                        `${config.connection.path || 'No Port'}-${config.connection.baudRate}-${config.connection.dataBits}-${config.connection.parity === 'none' ? 'N' : config.connection.parity.toUpperCase()}-${config.connection.stopBits}`
+                        : config.type === 'mqtt' ?
+                            `${config.host}:${config.port}` : 'Connected'}
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -587,21 +590,26 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                 {filteredLogs.map((log, index) => (
                     <div
                         key={index}
-                        className={`flex items-baseline gap-2.5 mb-1 hover:bg-[#2a2d2e] rounded-sm px-1.5 py-0.5 group relative border-l-2 leading-relaxed ${log.crcStatus === 'error' ? 'bg-[#4b1818]/20 border-[#f48771]' : 'border-transparent'
+                        className={`flex items-start gap-2.5 mb-1 hover:bg-[#2a2d2e] rounded-sm px-1.5 py-0.5 group relative border-l-2 leading-relaxed ${log.crcStatus === 'error' ? 'bg-[#4b1818]/20 border-[#f48771]' : 'border-transparent'
                             }`}
                         style={{ fontSize: 'inherit', fontFamily: 'inherit' }}
                     >
                         {showTimestamp && (
-                            <span className="text-[var(--st-timestamp)] shrink-0 font-mono opacity-90">
-                                [{formatTimestamp(log.timestamp, themeConfig.timestampFormat).trim()}]
-                            </span>
+                            <div className="shrink-0 flex items-center h-[1.6em] select-none">
+                                <span className="text-[var(--st-timestamp)] font-mono opacity-90">
+                                    [{formatTimestamp(log.timestamp, themeConfig.timestampFormat).trim()}]
+                                </span>
+                            </div>
                         )}
-                        <span className={`font-bold shrink-0 select-none ${log.type === 'TX' ? 'text-[var(--st-tx-label)]' :
-                            log.type === 'RX' ? 'text-[var(--st-rx-label)]' :
-                                'text-[var(--st-info-text)]'
-                            }`}>
-                            {log.type === 'TX' ? 'TX ->' : log.type === 'RX' ? 'RX <-' : log.type}
-                        </span>
+                        <div className="shrink-0 flex items-center justify-center h-[1.6em]">
+                            <span className={`font-bold select-none px-1 py-[1px] rounded-[3px] w-[36px] text-center text-[11px] leading-tight flex items-center justify-center shadow-sm border border-white/10 tracking-wide
+                                ${log.type === 'TX' ? 'bg-[#007acc] text-white' :
+                                    log.type === 'RX' ? 'bg-[#4ec9b0] text-[#1e1e1e]' :
+                                        'bg-[#454545] text-[#cccccc]'
+                                }`}>
+                                {log.type === 'TX' ? 'TX' : log.type === 'RX' ? 'RX' : 'INFO'}
+                            </span>
+                        </div>
                         <span className={`whitespace-pre-wrap break-all select-text cursor-text flex-1 ${log.type === 'TX' ? 'text-[var(--st-tx-text)]' :
                             log.type === 'RX' ? 'text-[var(--st-rx-text)]' :
                                 log.type === 'ERROR' ? 'text-[var(--st-error-text)]' :
@@ -633,7 +641,8 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                 fontFamily={fontFamily}
                 onConnectRequest={async () => {
                     // Try to connect if a port is configured
-                    if (config.connection.path && onConnectRequest) {
+                    const path = config.type === 'serial' ? config.connection.path : undefined;
+                    if (path && onConnectRequest) {
                         const result = await onConnectRequest();
                         // If result is explicitly false (connection failed), open settings
                         if (result === false) {
