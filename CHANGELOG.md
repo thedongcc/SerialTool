@@ -9,4 +9,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - 更改接收区TX RX INFO样式为高亮块
 - 新增复制成功提示功能
+- 新增接收区右键菜单并优化行显示效果
 

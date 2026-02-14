@@ -9,7 +9,6 @@ import { parseDOM, compileSegments, parseHex } from '../../utils/InputParser';
 import { ContextMenu } from '../common/ContextMenu';
 import { DndContext, DragEndEvent, PointerSensor, useSensor, useSensors, closestCenter, CollisionDetection, pointerWithin, rectIntersection, useDroppable } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { CommandProvider } from '../../context/CommandContext';
 import { MessagePipeline } from '../../services/MessagePipeline';
 
 // Helper component for the scrollable list area
@@ -544,7 +543,7 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
                                         <FolderPlus size={14} /> New Group
                                     </div>
                                     <div className="px-3 py-1.5 hover:bg-[#094771] hover:text-white cursor-pointer flex items-center gap-2"
-                                        onClick={() => { addCommand({ name: 'New Command', payload: '', mode: 'text', tokens: {} }); setShowMenu(false); }}>
+                                        onClick={() => { addCommand({ name: 'New Command', payload: '', mode: 'text', tokens: {}, parentId: undefined }); setShowMenu(false); }}>
                                         <FileText size={14} /> New Command
                                     </div>
                                     <div className="h-[1px] bg-[#3c3c3c] my-1" />
@@ -617,8 +616,6 @@ const CommandListSidebarContent = ({ onNavigate }: { onNavigate?: (view: string)
 
 export const CommandListSidebar = ({ onNavigate }: { onNavigate?: (view: string) => void }) => {
     return (
-        <CommandProvider>
-            <CommandListSidebarContent onNavigate={onNavigate} />
-        </CommandProvider>
+        <CommandListSidebarContent onNavigate={onNavigate} />
     );
 };

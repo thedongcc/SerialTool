@@ -1,9 +1,14 @@
+
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { SessionState, SessionConfig } from '../../types/session';
 import { SerialInput } from './SerialInput';
-import { Settings, Eye, EyeOff, X, Trash2, Download, ArrowDownToLine, Menu, ChevronDown } from 'lucide-react';
+import { Trash2, ArrowDownToLine, Menu, X, ChevronDown, Check, Download, Settings, Copy, FileText, ClipboardList } from 'lucide-react';
 import { CRCConfig } from '../../utils/crc';
 import { useSettings } from '../../context/SettingsContext';
+import { useToast } from '../../context/ToastContext';
+import { useCommandContext } from '../../context/CommandContext';
+import { ContextMenu } from '../common/ContextMenu';
+import { CommandEditorDialog } from '../commands/CommandEditorDialog';
 
 const formatTimestamp = (ts: number, fmt: string) => {
     const date = new Date(ts);
@@ -30,6 +35,7 @@ interface SerialMonitorProps {
 
 export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig, onInputStateChange, onClearLogs, onConnectRequest }: SerialMonitorProps) => {
     const { config: themeConfig } = useSettings();
+    const { showToast } = useToast();
     const { logs, isConnected, config } = session;
     const currentPort = config.type === 'serial' ? config.connection.path : '';
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -124,7 +130,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
         const content = logs.map(log => {
             const timestamp = new Date(log.timestamp).toLocaleTimeString();
             const data = formatData(log.data, viewMode, encoding);
-            return `[${timestamp}] [${log.type}] ${data}`;
+            return `[${timestamp}][${log.type}] ${data} `;
         }).join('\n');
 
         const blob = new Blob([content], { type: 'text/plain' });
@@ -239,11 +245,60 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
     // Let's add 'saveUIState' to deps (it's defined in component but wrapper around prop).
     // Actually, saveUIState uses 'onUpdateConfig'. We should wrap saveUIState in useCallback too or just put deps here.
 
+    // Command Context
+    const { addCommand } = useCommandContext();
+
+    // Context Menu State
+    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, log: any } | null>(null);
+    const [showCommandEditor, setShowCommandEditor] = useState<any | null>(null);
+
+    const handleLogContextMenu = (e: React.MouseEvent, log: any) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            log
+        });
+    };
+
+    const handleCopyLog = (log: any) => {
+        if (!log) return;
+        const text = formatData(log.data, viewMode, encoding);
+        navigator.clipboard.writeText(text);
+        showToast('已复制到剪贴板', 'success', 1500);
+        setContextMenu(null);
+    };
+
+    const handleAddToCommand = (log: any) => {
+        if (!log) return;
+        const payload = formatData(log.data, viewMode, encoding);
+        // Open Editor Dialog
+        setShowCommandEditor({
+            name: 'New Command',
+            payload: payload,
+            mode: viewMode === 'hex' ? 'hex' : 'text',
+            tokens: {},
+            lineEnding: '' // Default or detect?
+        });
+        setContextMenu(null);
+    };
+
+    const handleSaveCommand = (updates: any) => {
+        addCommand({
+            ...updates,
+            parentId: undefined // Add to root by default, or maybe prompt? User said "doesn't belong to any group"
+        });
+        setShowCommandEditor(null);
+    };
+
     return (
         <div
             className="absolute inset-0 flex flex-col bg-[var(--st-rx-bg)] bg-cover bg-center select-none"
             style={{ backgroundImage: 'var(--st-rx-bg-img)' }}
+            onClick={() => setContextMenu(null)}
         >
+            {/* ... styles ... */}
             <style>
                 {`
                     input[type=number]::-webkit-inner-spin-button,
@@ -256,8 +311,10 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                     }
                 `}
             </style>
-            {/* Enhanced Toolbar */}
+
+            {/* ... Toolbar ... */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#2b2b2b] bg-[#252526] shrink-0">
+                {/* ... existing toolbar code ... */}
                 <div className="text-sm font-medium text-[#cccccc] flex items-center gap-2">
                     {isConnected ? (
                         <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse" />
@@ -265,13 +322,10 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                         <div className="w-2 h-2 rounded-full bg-red-500" />
                     )}
 
-                    {/* Always show connection info if port is selected, otherwise 'No Port' or something? User said "same content as connected". */
-                        /* If not connected, we still have config.connection.path etc. from session state. */
-                    }
                     {config.type === 'serial' ?
-                        `${config.connection.path || 'No Port'}-${config.connection.baudRate}-${config.connection.dataBits}-${config.connection.parity === 'none' ? 'N' : config.connection.parity.toUpperCase()}-${config.connection.stopBits}`
+                        `${config.connection.path || 'No Port'} -${config.connection.baudRate} -${config.connection.dataBits} -${config.connection.parity === 'none' ? 'N' : config.connection.parity.toUpperCase()} -${config.connection.stopBits} `
                         : config.type === 'mqtt' ?
-                            `${config.host}:${config.port}` : 'Connected'}
+                            `${config.host}:${config.port} ` : 'Connected'}
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -288,6 +342,7 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                     </div>
                     {/* Mode Toggle & Options Group */}
                     <div className="flex items-center gap-1.5">
+                        {/* Hex/Text Display Mode */}
                         {/* Hex/Text Display Mode */}
                         <div className="flex items-center gap-1 bg-[#1e1e1e] p-0.5 rounded border border-[#3c3c3c] h-[26px]">
                             <button
@@ -590,9 +645,9 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                 {filteredLogs.map((log, index) => (
                     <div
                         key={index}
-                        className={`flex items-start gap-2.5 mb-1 hover:bg-[#2a2d2e] rounded-sm px-1.5 py-0.5 group relative border-l-2 leading-relaxed ${log.crcStatus === 'error' ? 'bg-[#4b1818]/20 border-[#f48771]' : 'border-transparent'
-                            }`}
+                        className={`flex items-start gap-2.5 mb-1 hover:bg-[#2a2d2e] rounded-sm px-1.5 py-0.5 group relative border-l-2 leading-relaxed ${log.crcStatus === 'error' ? 'bg-[#4b1818]/20 border-[#f48771]' : 'border-transparent'} ${contextMenu?.log === log ? 'bg-[#04395e]/40 ring-1 ring-[#04395e]' : ''}`}
                         style={{ fontSize: 'inherit', fontFamily: 'inherit' }}
+                        onContextMenu={(e) => handleLogContextMenu(e, log)}
                     >
                         {showTimestamp && (
                             <div className="shrink-0 flex items-center h-[1.6em] select-none">
@@ -656,6 +711,37 @@ export const SerialMonitor = ({ session, onShowSettings, onSend, onUpdateConfig,
                     }
                 }}
             />
+            {contextMenu && (
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    onClose={() => setContextMenu(null)}
+                    items={[
+                        {
+                            label: 'Copy',
+                            icon: <Copy size={13} />,
+                            onClick: () => handleCopyLog(contextMenu.log)
+                        },
+                        {
+                            label: 'Add to Command',
+                            icon: <FileText size={13} />,
+                            onClick: () => handleAddToCommand(contextMenu.log)
+                        }
+                    ]}
+                />
+            )}
+
+            {showCommandEditor && (
+                <CommandEditorDialog
+                    item={{
+                        id: 'new',
+                        type: 'command',
+                        ...showCommandEditor
+                    }}
+                    onClose={() => setShowCommandEditor(null)}
+                    onSave={handleSaveCommand}
+                />
+            )}
         </div>
     );
 };

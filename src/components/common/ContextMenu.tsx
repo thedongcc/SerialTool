@@ -46,18 +46,19 @@ export const ContextMenu = ({ x, y, items, onClose }: Props) => {
 
     return (
         <div
+
             ref={ref}
-            className="fixed z-[9999] bg-[#252526] border border-[#3c3c3c] shadow-lg rounded-sm py-1 min-w-[150px]"
+            className="fixed z-[9999] bg-[#1e1e1e]/95 backdrop-blur-sm border border-[#454545] shadow-xl rounded-md py-1 min-w-[160px] animate-in fade-in zoom-in-95 duration-100"
             style={style}
         >
             {items.map((item, idx) => {
                 if (item.separator) {
-                    return <div key={idx} className="h-[1px] bg-[#3c3c3c] my-1" />;
+                    return <div key={idx} className="h-[1px] bg-[#454545] my-1" />;
                 }
                 return (
                     <div
                         key={idx}
-                        className={`px-3 py-1.5 text-[13px] hover:bg-[#094771] hover:text-white cursor-pointer flex items-center gap-2 ${item.color === 'red' ? 'text-red-400' : 'text-[#cccccc]'}`}
+                        className={`px-3 py-1.5 text-[13px] hover:bg-[#04395e] hover:text-white cursor-pointer flex items-center gap-2 transition-colors ${item.color === 'red' ? 'text-red-400' : 'text-[#cccccc]'}`}
                         onClick={() => {
                             item.onClick();
                             onClose();
